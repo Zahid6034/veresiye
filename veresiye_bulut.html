@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Veresiye Defteri</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f0f0f;
+    --surface: #1a1a1a;
+    --surface2: #242424;
+    --border: #2e2e2e;
+    --accent: #e8c547;
+    --red: #e85447;
+    --green: #47e87c;
+    --text: #f0f0f0;
+    --muted: #888;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  body {
+    background: var(--bg); color: var(--text); font-family: 'Syne', sans-serif;
+    min-height: 100vh; max-width: 480px; margin: 0 auto; padding-bottom: 100px;
+  }
+  .sync-bar {
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    padding: 8px; font-size: 11px; color: var(--muted);
+    background: var(--surface); border-bottom: 1px solid var(--border); transition: all 0.3s;
+  }
+  .sync-bar.syncing { color: var(--accent); }
+  .sync-bar.error { color: var(--red); }
+  .sync-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); flex-shrink: 0; }
+  .sync-bar.syncing .sync-dot { background: var(--accent); animation: pulse 0.8s infinite; }
+  .sync-bar.error .sync-dot { background: var(--red); }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
+  .header {
+    padding: 20px 20px 16px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; background: var(--bg); z-index: 10;
+  }
+  .header-top { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px; }
+  .app-title { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  .app-title span { color: var(--accent); }
+  .total-badge { background: var(--surface2); border: 1px solid var(--border); border-radius: 10px; padding: 8px 14px; text-align: right; }
+  .total-label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .total-amount { font-size: 20px; font-weight: 700; color: var(--accent); font-family: 'DM Mono', monospace; }
+  .search-bar { position: relative; }
+  .search-bar input {
+    width: 100%; background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+    padding: 12px 16px 12px 40px; color: var(--text); font-family: 'Syne', sans-serif;
+    font-size: 14px; outline: none; transition: border-color 0.2s;
+  }
+  .search-bar input:focus { border-color: var(--accent); }
+  .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); font-size: 16px; }
+  .list-container { padding: 16px 20px; }
+  .section-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; margin-bottom: 12px; font-weight: 600; }
+  .customer-card {
+    background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 10px; cursor: pointer; transition: all 0.2s; position: relative; overflow: hidden;
+  }
+  .customer-card::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 3px; background: var(--accent); border-radius: 3px 0 0 3px; }
+  .customer-card:active { transform: scale(0.98); background: var(--surface2); }
+  .card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .customer-name { font-size: 16px; font-weight: 700; }
+  .customer-debt { font-size: 18px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--accent); }
+  .customer-debt.zero { color: var(--green); }
+  .card-bottom { display: flex; justify-content: space-between; align-items: center; }
+  .last-activity { font-size: 11px; color: var(--muted); }
+  .transaction-count { font-size: 11px; color: var(--muted); background: var(--surface2); padding: 3px 8px; border-radius: 20px; }
+  .empty-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .empty-icon { font-size: 48px; margin-bottom: 12px; }
+  .empty-text { font-size: 14px; line-height: 1.6; }
+  .loading-state { text-align: center; padding: 60px 20px; color: var(--muted); }
+  .spinner { width: 32px; height: 32px; border: 3px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .fab {
+    position: fixed; bottom: 24px; right: 24px; width: 62px; height: 62px;
+    background: var(--accent); color: #000; border: none; border-radius: 50%;
+    font-size: 28px; cursor: pointer; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 4px 24px rgba(232,197,71,0.4); transition: all 0.2s; z-index: 100; font-weight: 700;
+  }
+  .fab:active { transform: scale(0.92); }
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 200;
+    display: none; align-items: flex-end; justify-content: center; backdrop-filter: blur(4px);
+  }
+  .modal-overlay.open { display: flex; }
+  .modal { background: var(--surface); border-radius: 20px 20px 0 0; padding: 28px 24px 40px; width: 100%; max-width: 480px; animation: slideUp 0.25s ease; }
+  @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+  .modal-handle { width: 40px; height: 4px; background: var(--border); border-radius: 2px; margin: 0 auto 24px; }
+  .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 20px; }
+  .modal-title span { color: var(--accent); }
+  .input-group { margin-bottom: 16px; }
+  .input-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; display: block; font-weight: 600; }
+  .modal-input {
+    width: 100%; background: var(--surface2); border: 1px solid var(--border); border-radius: 10px;
+    padding: 14px 16px; color: var(--text); font-family: 'Syne', sans-serif; font-size: 16px; outline: none; transition: border-color 0.2s;
+  }
+  .modal-input:focus { border-color: var(--accent); }
+  .modal-input::placeholder { color: var(--muted); }
+  .modal-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 20px; }
+  .btn { padding: 15px; border-radius: 10px; border: none; font-family: 'Syne', sans-serif; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .btn:active { transform: scale(0.96); }
+  .btn:disabled { opacity: 0.5; }
+  .btn-cancel { background: var(--surface2); color: var(--muted); }
+  .btn-confirm { background: var(--accent); color: #000; }
+  .btn-debt { background: var(--red); color: #fff; }
+  .btn-payment { background: var(--green); color: #000; }
+  /* QUICK TAGS */
+  .quick-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .quick-tag {
+    padding: 8px 14px; border-radius: 20px; border: 1px solid var(--border);
+    background: var(--surface2); color: var(--text); font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.15s; user-select: none;
+  }
+  .quick-tag:active { transform: scale(0.94); }
+  .quick-tag.selected { background: var(--accent); color: #000; border-color: var(--accent); }
+  /* TYPE SELECTOR */
+  .type-selector { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+  .type-btn { padding: 12px; border-radius: 10px; border: 2px solid var(--border); background: transparent; color: var(--muted); font-family: 'Syne', sans-serif; font-size: 13px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .type-btn.active-debt { border-color: var(--red); color: var(--red); background: rgba(232,84,71,0.1); }
+  .type-btn.active-payment { border-color: var(--green); color: var(--green); background: rgba(71,232,124,0.1); }
+  /* DETAIL */
+  .detail-name { font-size: 24px; font-weight: 800; margin-bottom: 6px; }
+  .detail-debt { font-size: 26px; font-weight: 700; font-family: 'DM Mono', monospace; color: var(--accent); margin-bottom: 20px; }
+  .detail-debt.zero { color: var(--green); }
+  .tx-list { margin-bottom: 16px; max-height: 220px; overflow-y: auto; }
+  .tx-item { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--border); }
+  .tx-item:last-child { border-bottom: none; }
+  .tx-note { font-size: 13px; font-weight: 600; }
+  .tx-date { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .tx-amount { font-size: 15px; font-weight: 700; font-family: 'DM Mono', monospace; }
+  .tx-amount.debit { color: var(--red); }
+  .tx-amount.credit { color: var(--green); }
+  .action-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+  .delete-btn {
+    width: 100%; padding: 12px; background: transparent; border: 1px solid var(--border);
+    border-radius: 10px; color: var(--muted); font-family: 'Syne', sans-serif;
+    font-size: 13px; font-weight: 600; cursor: pointer; transition: all 0.2s;
+  }
+  .delete-btn:active { background: var(--red); color: #fff; border-color: var(--red); }
+</style>
+</head>
+<body>
+
+<div class="sync-bar" id="syncBar">
+  <div class="sync-dot"></div>
+  <span id="syncText">Bağlı</span>
+</div>
+
+<div class="header">
+  <div class="header-top">
+    <div class="app-title">Veresiye <span>Defteri</span></div>
+    <div class="total-badge">
+      <div class="total-label">Toplam Alacak</div>
+      <div class="total-amount" id="totalAmount">— ₺</div>
+    </div>
+  </div>
+  <div class="search-bar">
+    <span class="search-icon">🔍</span>
+    <input type="text" id="searchInput" placeholder="Müşteri ara..." oninput="renderList()">
+  </div>
+</div>
+
+<div class="list-container">
+  <div class="section-label" id="listLabel">Yükleniyor...</div>
+  <div id="customerList">
+    <div class="loading-state"><div class="spinner"></div><div>Veriler yükleniyor...</div></div>
+  </div>
+</div>
+
+<button class="fab" onclick="openNewCustomerModal()">+</button>
+
+<!-- YENİ MÜŞTERİ -->
+<div class="modal-overlay" id="newCustomerModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">Yeni <span>Müşteri</span></div>
+    <div class="input-group">
+      <label class="input-label">Müşteri Adı</label>
+      <input type="text" class="modal-input" id="newCustomerName" placeholder="Ahmet Usta..." />
+    </div>
+    <div class="input-group">
+      <label class="input-label">İlk Borç (opsiyonel)</label>
+      <input type="number" class="modal-input" id="newCustomerDebt" placeholder="0" inputmode="decimal" />
+    </div>
+    <div class="input-group" id="noteGroupNew" style="display:none">
+      <label class="input-label">Not (opsiyonel)</label>
+      <input type="text" class="modal-input" id="newCustomerNote" placeholder="Alışveriş, sigara vb." />
+    </div>
+    <div class="modal-buttons">
+      <button class="btn btn-cancel" onclick="closeModal('newCustomerModal')">İptal</button>
+      <button class="btn btn-confirm" id="addCustomerBtn" onclick="addCustomer()">Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- İŞLEM -->
+<div class="modal-overlay" id="transactionModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title"><span id="txModalName" style="color:var(--accent)"></span></div>
+    <div class="type-selector">
+      <button class="type-btn active-debt" id="typeDebt" onclick="selectType('debt')">📤 Veresiye</button>
+      <button class="type-btn" id="typePayment" onclick="selectType('payment')">📥 Ödeme</button>
+    </div>
+    <div class="input-group">
+      <label class="input-label">Tutar (₺)</label>
+      <input type="number" class="modal-input" id="txAmount" placeholder="0" inputmode="decimal" />
+    </div>
+    <div class="input-group">
+      <label class="input-label">Ne aldı? (hızlı seç veya yaz)</label>
+      <div class="quick-tags">
+        <div class="quick-tag" onclick="selectTag(this,'🚬 Sigara')">🚬 Sigara</div>
+        <div class="quick-tag" onclick="selectTag(this,'🍞 Ekmek')">🍞 Ekmek</div>
+        <div class="quick-tag" onclick="selectTag(this,'🥛 Süt')">🥛 Süt</div>
+        <div class="quick-tag" onclick="selectTag(this,'🧃 İçecek')">🧃 İçecek</div>
+        <div class="quick-tag" onclick="selectTag(this,'🛢️ Yağ')">🛢️ Yağ</div>
+        <div class="quick-tag" onclick="selectTag(this,'🧹 Temizlik')">🧹 Temizlik</div>
+        <div class="quick-tag" onclick="selectTag(this,'🍫 Abur cubur')">🍫 Abur cubur</div>
+        <div class="quick-tag" onclick="selectTag(this,'☕ Kahve')">☕ Kahve</div>
+        <div class="quick-tag" onclick="selectTag(this,'🧂 Bakliyat')">🧂 Bakliyat</div>
+        <div class="quick-tag" onclick="selectTag(this,'🧻 Kağıt ürün')">🧻 Kağıt</div>
+        <div class="quick-tag" onclick="selectTag(this,'🥚 Yumurta')">🥚 Yumurta</div>
+        <div class="quick-tag" onclick="selectTag(this,'🍬 Şeker')">🍬 Şeker</div>
+      </div>
+      <input type="text" class="modal-input" id="txNote" placeholder="Veya buraya yaz..." oninput="clearTagSelection()" />
+    </div>
+    <div class="modal-buttons">
+      <button class="btn btn-cancel" onclick="closeModal('transactionModal')">İptal</button>
+      <button class="btn btn-debt" id="txConfirmBtn" onclick="addTransaction()">Veresiye Ekle</button>
+    </div>
+  </div>
+</div>
+
+<!-- DETAY -->
+<div class="modal-overlay" id="detailModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="detail-name" id="detailName"></div>
+    <div class="detail-debt" id="detailDebt"></div>
+    <div class="tx-list" id="txList"></div>
+    <div class="action-buttons">
+      <button class="btn btn-debt" onclick="openTxFromDetail('debt')">📤 Veresiye</button>
+      <button class="btn btn-payment" onclick="openTxFromDetail('payment')">📥 Ödeme</button>
+    </div>
+    <button class="delete-btn" onclick="deleteCustomer()">🗑️ Müşteriyi Sil</button>
+  </div>
+</div>
+
+<script>
+  const API_URL = 'https://script.google.com/macros/s/AKfycbxxI2wmIVzDw9HKVhxQ4dvTMw-ZjAm6yWNIp3b2Xz1enJpqfQrVOd9Z5ErX4mKgrzYc/exec';
+
+  let customers = [];
+  let activeCustomerId = null;
+  let txType = 'debt';
+  let isSaving = false;
+
+  async function loadData() {
+    setSyncState('syncing', 'Yükleniyor...');
+    try {
+      const res = await fetch(API_URL);
+      const text = await res.text();
+      customers = text && text.trim().startsWith('[') ? JSON.parse(text) : [];
+      setSyncState('ok', 'Bağlı');
+    } catch(e) {
+      customers = [];
+      setSyncState('error', 'Bağlantı hatası');
+    }
+    renderList();
+  }
+
+  async function saveData() {
+    if (isSaving) return;
+    isSaving = true;
+    setSyncState('syncing', 'Kaydediliyor...');
+    try {
+      await fetch(API_URL, { method: 'POST', body: JSON.stringify(customers) });
+      setSyncState('ok', 'Kaydedildi ✓');
+      setTimeout(() => setSyncState('ok', 'Bağlı'), 2000);
+    } catch(e) {
+      setSyncState('error', 'Kayıt hatası');
+    }
+    isSaving = false;
+  }
+
+  function setSyncState(state, text) {
+    document.getElementById('syncBar').className = 'sync-bar ' + (state === 'ok' ? '' : state);
+    document.getElementById('syncText').textContent = text;
+  }
+
+  setInterval(async () => {
+    if (document.hidden) return;
+    try {
+      const res = await fetch(API_URL);
+      const text = await res.text();
+      const fresh = text && text.trim().startsWith('[') ? JSON.parse(text) : [];
+      if (JSON.stringify(fresh) !== JSON.stringify(customers)) {
+        customers = fresh;
+        renderList();
+        setSyncState('ok', 'Güncellendi ✓');
+        setTimeout(() => setSyncState('ok', 'Bağlı'), 2000);
+      }
+    } catch(e) {}
+  }, 20000);
+
+  function formatMoney(n) {
+    return n.toLocaleString('tr-TR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ₺';
+  }
+  function formatDate(ts) {
+    const d = new Date(ts), now = new Date(), diff = now - d;
+    if (diff < 60000) return 'Az önce';
+    if (diff < 3600000) return Math.floor(diff/60000) + ' dk önce';
+    if (diff < 86400000) return Math.floor(diff/3600000) + ' sa önce';
+    if (diff < 172800000) return 'Dün';
+    return d.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' });
+  }
+  function getDebt(c) {
+    return c.transactions.reduce((s,t) => t.type==='debt' ? s+t.amount : s-t.amount, 0);
+  }
+  function getTotalDebt() {
+    return customers.reduce((s,c) => s + Math.max(0, getDebt(c)), 0);
+  }
+
+  function renderList() {
+    const search = document.getElementById('searchInput').value.toLowerCase();
+    const filtered = customers.filter(c => c.name.toLowerCase().includes(search));
+    const list = document.getElementById('customerList');
+    const label = document.getElementById('listLabel');
+    document.getElementById('totalAmount').textContent = formatMoney(getTotalDebt());
+    if (filtered.length === 0) {
+      label.textContent = 'Müşteriler';
+      list.innerHTML = `<div class="empty-state"><div class="empty-icon">📒</div><div class="empty-text">${search ? 'Müşteri bulunamadı.' : 'Henüz müşteri yok.<br>+ butonuna bas ve ekle.'}</div></div>`;
+      return;
+    }
+    const sorted = [...filtered].sort((a,b) => a.name.localeCompare(b.name, 'tr'));
+    label.textContent = `${sorted.length} Müşteri`;
+    list.innerHTML = sorted.map(c => {
+      const debt = getDebt(c);
+      const lastTx = c.transactions.length > 0 ? c.transactions[c.transactions.length-1] : null;
+      return `<div class="customer-card" onclick="openDetail('${c.id}')">
+        <div class="card-top">
+          <div class="customer-name">${c.name}</div>
+          <div class="customer-debt ${debt<=0?'zero':''}">${formatMoney(Math.abs(debt))}${debt<0?' 🟢':''}</div>
+        </div>
+        <div class="card-bottom">
+          <div class="last-activity">${lastTx ? formatDate(lastTx.ts) : 'İşlem yok'}</div>
+          <div class="transaction-count">${c.transactions.length} işlem</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  function openNewCustomerModal() {
+    document.getElementById('newCustomerName').value = '';
+    document.getElementById('newCustomerDebt').value = '';
+    document.getElementById('newCustomerNote').value = '';
+    const debtInput = document.getElementById('newCustomerDebt');
+    const noteGroup = document.getElementById('noteGroupNew');
+    debtInput.oninput = () => { noteGroup.style.display = debtInput.value ? 'block' : 'none'; };
+    noteGroup.style.display = 'none';
+    document.getElementById('addCustomerBtn').disabled = false;
+    document.getElementById('newCustomerModal').classList.add('open');
+    setTimeout(() => document.getElementById('newCustomerName').focus(), 300);
+  }
+
+  async function addCustomer() {
+    const name = document.getElementById('newCustomerName').value.trim();
+    if (!name) { document.getElementById('newCustomerName').focus(); return; }
+    const debtVal = parseFloat(document.getElementById('newCustomerDebt').value);
+    const note = document.getElementById('newCustomerNote').value.trim();
+    document.getElementById('addCustomerBtn').disabled = true;
+    const c = { id: Date.now().toString(), name, transactions: [] };
+    if (debtVal > 0) {
+      c.transactions.push({ id: Date.now().toString(), type: 'debt', amount: debtVal, note: note || 'İlk bakiye', ts: Date.now() });
+    }
+    customers.push(c);
+    closeModal('newCustomerModal');
+    renderList();
+    await saveData();
+  }
+
+  function openDetail(id) {
+    activeCustomerId = id;
+    const c = customers.find(x => x.id === id);
+    const debt = getDebt(c);
+    document.getElementById('detailName').textContent = c.name;
+    const debtEl = document.getElementById('detailDebt');
+    debtEl.textContent = debt <= 0 ? (debt < 0 ? `${formatMoney(Math.abs(debt))} fazla ödedi` : 'Borcu yok ✓') : formatMoney(debt) + ' borçlu';
+    debtEl.className = 'detail-debt' + (debt <= 0 ? ' zero' : '');
+    const txList = document.getElementById('txList');
+    if (c.transactions.length === 0) {
+      txList.innerHTML = '<div style="color:var(--muted);font-size:13px;padding:12px 0;">Henüz işlem yok.</div>';
+    } else {
+      txList.innerHTML = [...c.transactions].reverse().map(t => `
+        <div class="tx-item">
+          <div>
+            <div class="tx-note">${t.note || (t.type==='debt'?'Veresiye':'Ödeme')}</div>
+            <div class="tx-date">${formatDate(t.ts)}</div>
+          </div>
+          <div class="tx-amount ${t.type==='debt'?'debit':'credit'}">${t.type==='debt'?'+':'-'}${formatMoney(t.amount)}</div>
+        </div>`).join('');
+    }
+    document.getElementById('detailModal').classList.add('open');
+  }
+
+  function openTxFromDetail(type) {
+    closeModal('detailModal');
+    setTimeout(() => openTransactionModal(type), 200);
+  }
+
+  function openTransactionModal(type = 'debt') {
+    txType = type;
+    selectType(type);
+    document.getElementById('txAmount').value = '';
+    document.getElementById('txNote').value = '';
+    document.querySelectorAll('.quick-tag').forEach(t => t.classList.remove('selected'));
+    const c = customers.find(x => x.id === activeCustomerId);
+    document.getElementById('txModalName').textContent = c ? c.name : '';
+    document.getElementById('txConfirmBtn').disabled = false;
+    document.getElementById('transactionModal').classList.add('open');
+    setTimeout(() => document.getElementById('txAmount').focus(), 300);
+  }
+
+  function selectTag(el, label) {
+    const isSelected = el.classList.contains('selected');
+    document.querySelectorAll('.quick-tag').forEach(t => t.classList.remove('selected'));
+    if (!isSelected) {
+      el.classList.add('selected');
+      document.getElementById('txNote').value = label;
+    } else {
+      document.getElementById('txNote').value = '';
+    }
+  }
+
+  function clearTagSelection() {
+    document.querySelectorAll('.quick-tag').forEach(t => t.classList.remove('selected'));
+  }
+
+  function selectType(type) {
+    txType = type;
+    const d = document.getElementById('typeDebt');
+    const p = document.getElementById('typePayment');
+    const btn = document.getElementById('txConfirmBtn');
+    if (type === 'debt') {
+      d.className = 'type-btn active-debt'; p.className = 'type-btn';
+      btn.className = 'btn btn-debt'; btn.textContent = 'Veresiye Ekle';
+    } else {
+      d.className = 'type-btn'; p.className = 'type-btn active-payment';
+      btn.className = 'btn btn-payment'; btn.textContent = 'Ödeme Ekle';
+    }
+  }
+
+  async function addTransaction() {
+    const amount = parseFloat(document.getElementById('txAmount').value);
+    if (!amount || amount <= 0) { document.getElementById('txAmount').focus(); return; }
+    const note = document.getElementById('txNote').value.trim();
+    document.getElementById('txConfirmBtn').disabled = true;
+    const c = customers.find(x => x.id === activeCustomerId);
+    c.transactions.push({ id: Date.now().toString(), type: txType, amount, note, ts: Date.now() });
+    closeModal('transactionModal');
+    renderList();
+    await saveData();
+  }
+
+  async function deleteCustomer() {
+    const c = customers.find(x => x.id === activeCustomerId);
+    if (!c) return;
+    if (window.confirm('"' + c.name + '" silinsin mi?\nTüm işlemler de silinir.')) {
+      customers = customers.filter(x => x.id !== activeCustomerId);
+      activeCustomerId = null;
+      closeModal('detailModal');
+      renderList();
+      await saveData();
+    }
+  }
+
+  function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+  document.querySelectorAll('.modal-overlay').forEach(el => {
+    el.addEventListener('click', e => { if (e.target === el) el.classList.remove('open'); });
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+      if (document.getElementById('newCustomerModal').classList.contains('open')) addCustomer();
+      if (document.getElementById('transactionModal').classList.contains('open')) addTransaction();
+    }
+  });
+
+  loadData();
+</script>
+</body>
+</html>
