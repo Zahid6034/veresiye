@@ -452,10 +452,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
   <button class="nb" id="nb-dash" onclick="go('dash')"><span class="i">📊</span>Dashboard</button>
   <div class="tb-r">
     <span class="kbd-hint" id="stock-alert" style="display:none;color:var(--rd);border-color:var(--rd);">⚠️ Düşük stok</span>
-    <div id="gs-bar" style="display:flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--b);border-radius:5px;padding:4px 9px;font-size:10px;font-family:var(--fm);color:var(--tx2);">
-      <div id="gs-dot" style="width:6px;height:6px;border-radius:50%;background:var(--tx3);flex-shrink:0;"></div>
+    <div id="gs-bar" style="display:flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--b);border-radius:5px;padding:4px 9px;font-size:10px;font-family:var(--fm);color:var(--tx2);cursor:pointer;" onclick="openSettings()">
+      <div id="gs-dot" style="width:6px;height:6px;border-radius:50%;background:var(--tx3);flex-shrink:0;transition:background .3s;"></div>
       <span id="gs-txt">Sheets</span>
     </div>
+    <button class="nb" onclick="openSettings()" style="padding:5px 10px;font-size:12px;">⚙️</button>
     <div class="clk" id="clk">--:--</div>
   </div>
 </div>
@@ -469,7 +470,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
       <div class="sbar-led" id="sled">▦</div>
       <input type="text" id="sinput" placeholder="Barkod okut → otomatik ekle" autocomplete="off" autocorrect="off">
       <button class="undo-btn" id="undo-btn" onclick="undoLast()" disabled>↩ Geri al</button>
-      <div class="sbar-info" id="sbar-info">F1 Nakit · F2 Kart · F3 Veresiye</div>
+      <div class="sbar-info" id="sbar-info">Enter Nakit · K Kart · Space Veresiye</div>
     </div>
     <div id="cart" class="cart">
       <div class="cart-empty" id="cempty">
@@ -494,9 +495,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
     </div>
     <div class="pay-wrap">
       <div class="pay-title">Ödeme — Klavye kısayolları</div>
-      <button class="pb nakit" id="pb-nakit" onclick="openPay('nakit')" disabled>💵 Nakit<span class="kbd">F1</span></button>
-      <button class="pb kart"  id="pb-kart"  onclick="openPay('kart')"  disabled>💳 Kart<span class="kbd">F2</span></button>
-      <button class="pb ver"   id="pb-ver"   onclick="openPay('ver')"   disabled>📒 Veresiye<span class="kbd">F3</span></button>
+      <button class="pb nakit" id="pb-nakit" onclick="openPay('nakit')" disabled>💵 Nakit<span class="kbd">Enter</span></button>
+      <button class="pb kart"  id="pb-kart"  onclick="openPay('kart')"  disabled>💳 Kart<span class="kbd">K</span></button>
+      <button class="pb ver"   id="pb-ver"   onclick="openPay('ver')"   disabled>📒 Veresiye<span class="kbd">Space</span></button>
       <button class="pb iptal" id="pb-iptal" onclick="clearCart(true)"  disabled>🗑️ Temizle<span class="kbd">ESC</span></button>
     </div>
     <div class="pos-footer">
@@ -568,10 +569,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         <option value="diger">Diğer</option>
       </select>
       <select class="pt-sel" id="psort" onchange="renderProds()">
-        <option value="name">Ad</option><option value="price">Fiyat</option>
-        <option value="stock">Stok</option><option value="sales">En Çok Satan</option>
+        <option value="name">Ada göre</option><option value="price">Fiyata göre</option>
+        <option value="stock">Stoka göre</option><option value="sales">Çok satana göre</option>
       </select>
-      <button class="xbtn s" style="width:auto;padding:6px 12px;margin:0;font-size:11px;" onclick="exportCSV()">📤 CSV</button>
+      <button class="xbtn p" style="width:auto;padding:6px 14px;margin:0;font-size:12px;white-space:nowrap;" onclick="openImportModal()">📥 İçe Aktar</button>
+      <button class="xbtn s" style="width:auto;padding:6px 10px;margin:0;font-size:11px;" onclick="exportCSV()">📤 Dışa Aktar</button>
     </div>
     <div class="prod-list" id="prod-list"></div>
   </div>
@@ -692,7 +694,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         </div>
       </div>
       <div id="cust-section" style="display:none;">
-        <div style="font-size:10px;font-family:var(--fm);color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;">Müşteri Seç</div>
+        <!-- Arama -->
+        <div style="position:relative;margin-bottom:10px;">
+          <input type="text" id="cust-search" placeholder="🔍 İsimle ara..."
+            oninput="renderCustGrid()"
+            style="width:100%;background:var(--s3);border:1.5px solid var(--b2);border-radius:var(--r2);padding:9px 12px;color:var(--tx);font-family:var(--ff);font-size:13px;outline:none;"
+            onfocus="this.style.borderColor='var(--am)'" onblur="this.style.borderColor='var(--b2)'">
+        </div>
+        <!-- Müşteri grid -->
         <div class="cg" id="cust-grid"></div>
         <button class="xbtn s" style="font-size:11px;padding:7px;margin-top:8px;" onclick="openNewMust(true)">+ Yeni Müşteri Ekle</button>
       </div>
@@ -777,11 +786,163 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
   </div>
 </div>
 
-<div class="toast" id="toast"><span id="t-ic"></span><span id="t-ms"></span></div>
+<!-- ÜRÜN İÇE AKTAR MODAL -->
+<div class="ov" id="ov-import">
+  <div class="modal modal-lg">
+    <div class="mh"><h3>📥 Ürün İçe Aktar</h3><button class="xb" onclick="closeOv('ov-import')">✕</button></div>
+    <div class="mb">
 
-<!-- FİŞ PRINT -->
+      <!-- Tab seçici -->
+      <div style="display:flex;gap:6px;margin-bottom:16px;">
+        <button id="imp-tab-file" onclick="switchImpTab('file')"
+          style="flex:1;padding:9px;border-radius:var(--r2);border:1.5px solid var(--am);background:var(--am-d);color:var(--am);font-family:var(--ff);font-size:12px;font-weight:600;cursor:pointer;">
+          📁 Excel / CSV Dosyası
+        </button>
+        <button id="imp-tab-gs" onclick="switchImpTab('gs')"
+          style="flex:1;padding:9px;border-radius:var(--r2);border:1.5px solid var(--b);background:none;color:var(--tx2);font-family:var(--ff);font-size:12px;font-weight:600;cursor:pointer;">
+          📊 Google Sheets URL
+        </button>
+        <button id="imp-tab-tpl" onclick="switchImpTab('tpl')"
+          style="flex:1;padding:9px;border-radius:var(--r2);border:1.5px solid var(--b);background:none;color:var(--tx2);font-family:var(--ff);font-size:12px;font-weight:600;cursor:pointer;">
+          ⬇️ Şablon İndir
+        </button>
+      </div>
+
+      <!-- Dosya yükleme -->
+      <div id="imp-panel-file">
+        <div id="drop-zone"
+          style="border:2px dashed var(--b2);border-radius:var(--r);padding:28px;text-align:center;cursor:pointer;transition:all .2s;"
+          onclick="document.getElementById('imp-file-inp').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--am)'"
+          ondragleave="this.style.borderColor='var(--b2)'"
+          ondrop="handleFileDrop(event)">
+          <div style="font-size:32px;margin-bottom:8px;">📄</div>
+          <div style="font-size:13px;font-weight:600;">Excel (.xlsx, .xls) veya CSV sürükle-bırak</div>
+          <div style="font-size:11px;color:var(--tx3);margin-top:4px;font-family:var(--fm);">ya da tıkla seç</div>
+          <input type="file" id="imp-file-inp" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleFileSelect(this)">
+        </div>
+        <div style="margin-top:10px;font-size:11px;color:var(--tx3);">
+          Beklenen sütunlar: <span style="font-family:var(--fm);color:var(--am);">Barkod, Ad, Fiyat, AlışFiyatı, Kategori, Stok, MinStok</span>
+          (sıra ve isim esnek, otomatik eşleşir)
+        </div>
+      </div>
+
+      <!-- Google Sheets URL -->
+      <div id="imp-panel-gs" style="display:none;">
+        <div style="background:var(--s2);border:1px solid var(--b);border-radius:var(--r2);padding:14px;margin-bottom:12px;font-size:12px;color:var(--tx2);line-height:1.6;">
+          <strong style="color:var(--am);">Nasıl yapılır:</strong><br>
+          1. Google Sheets'ini aç → <strong>Dosya → Paylaş → Bağlantıyla paylaş</strong> (Görüntüleyici)<br>
+          2. Sayfanın URL'sini aşağıya yapıştır<br>
+          3. Sütunlar: Barkod | Ad | Fiyat | Alış | Kategori | Stok | MinStok
+        </div>
+        <div class="fg">
+          <label>Google Sheets URL</label>
+          <input type="text" id="gs-import-url" placeholder="https://docs.google.com/spreadsheets/d/..." style="font-size:12px;">
+        </div>
+        <button class="xbtn p" style="margin-top:8px;" onclick="importFromGS()">📥 Çek ve Önizle</button>
+      </div>
+
+      <!-- Şablon -->
+      <div id="imp-panel-tpl" style="display:none;">
+        <div style="background:var(--s2);border:1px solid var(--b);border-radius:var(--r);padding:18px;text-align:center;">
+          <div style="font-size:28px;margin-bottom:8px;">📋</div>
+          <div style="font-size:13px;font-weight:600;margin-bottom:6px;">Ürün Şablonu</div>
+          <div style="font-size:11px;color:var(--tx3);margin-bottom:14px;">Mevcut ürünleri de içerir — düzenleyip geri yükleyebilirsin</div>
+          <button class="xbtn p" style="width:auto;padding:10px 20px;" onclick="downloadTemplate()">⬇️ Excel Şablonu İndir</button>
+          <div style="margin-top:8px;font-size:10px;color:var(--tx3);font-family:var(--fm);">CSV formatında, Excel'de açılır</div>
+        </div>
+      </div>
+
+      <!-- Preview -->
+      <div id="imp-preview" style="display:none;margin-top:14px;">
+        <div style="font-size:11px;font-family:var(--fm);color:var(--tx3);text-transform:uppercase;letter-spacing:.8px;margin-bottom:8px;" id="imp-preview-lbl">Önizleme</div>
+        <div style="overflow-x:auto;max-height:200px;overflow-y:auto;border:1px solid var(--b);border-radius:var(--r2);" id="imp-preview-table"></div>
+        <div style="display:flex;align-items:center;gap:10px;margin-top:10px;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;">
+            <input type="checkbox" id="imp-replace" style="width:auto;"> Mevcut ürünleri koru (üzerine yaz değil, ekle/güncelle)
+          </label>
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="xbtn s" style="width:auto;padding:8px 14px;margin:0;" onclick="closeOv('ov-import')">İptal</button>
+      <button class="xbtn p" style="width:auto;padding:8px 20px;margin:0;" id="imp-confirm-btn" onclick="applyImport()" disabled>✅ İçe Aktar</button>
+    </div>
+  </div>
+</div>
+
+<!-- AYARLAR MODAL -->
+<div class="ov" id="ov-settings">
+  <div class="modal modal-lg">
+    <div class="mh"><h3>⚙️ Ayarlar & Bağlantı</h3><button class="xb" onclick="closeOv('ov-settings')">✕</button></div>
+    <div class="mb">
+
+      <div style="background:var(--bl-d);border:1px solid rgba(59,130,246,.3);border-radius:var(--r2);padding:14px;margin-bottom:14px;font-size:12px;line-height:1.7;color:var(--tx2);">
+        <div style="font-size:13px;font-weight:700;color:var(--bl);margin-bottom:6px;">ℹ️ Nasıl çalışır?</div>
+        <div><strong style="color:var(--tx);">GitHub Pages</strong> → uygulamayı barındırır (tarayıcıya gelir)</div>
+        <div><strong style="color:var(--tx);">Apps Script</strong> → Google sunucusunda, Sheets'e yazar</div>
+        <div><strong style="color:var(--tx);">Google Sheets</strong> → veritabanın</div>
+        <div style="margin-top:6px;">3 ayrı sistem. GitHub'a yükledikten sonra Apps Script'i <strong>ayrıca Google'da</strong> güncellemen gerekir.</div>
+      </div>
+
+      <div style="background:var(--gr-d);border:1px solid rgba(34,197,94,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
+        <div style="font-size:13px;font-weight:700;color:var(--gr);margin-bottom:6px;">📶 İnternet kesilirse?</div>
+        <div>Her satış <strong style="color:var(--tx);">önce cihaza</strong> kaydedilir — internet olmasa da çalışır.</div>
+        <div>İnternet yokken işlemler <strong style="color:var(--tx);">kuyrukta</strong> bekler (gösterge mavi olur).</div>
+        <div>Bağlantı gelince <strong style="color:var(--tx);">otomatik</strong> Sheets'e gönderilir. Veri kaybolmaz.</div>
+      </div>
+
+      <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--gr);"></div> Bağlı</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--am);"></div> Kaydediyor</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--bl);"></div> Bekliyor</div>
+        <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--rd);"></div> Hata</div>
+      </div>
+
+      <div class="fs-sec">Google Sheets Bağlantısı</div>
+      <div class="fg">
+        <label>Apps Script URL</label>
+        <input type="text" id="cfg-gs-url" placeholder="https://script.google.com/macros/s/...">
+        <div style="font-size:10px;color:var(--tx3);margin-top:4px;">script.google.com'dan aldığın Web Uygulaması URL'si</div>
+      </div>
+      <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
+        <button class="xbtn s" style="width:auto;padding:7px 12px;margin:0;font-size:11px;" onclick="testGsConnection()">🔌 Bağlantıyı Test Et</button>
+        <button class="xbtn s" style="width:auto;padding:7px 12px;margin:0;font-size:11px;" onclick="forceSyncNow()">🔄 Şimdi Yedekle</button>
+        <div id="gs-test-result" style="font-size:11px;color:var(--tx2);padding:7px 0;font-family:var(--fm);"></div>
+      </div>
+
+      <div style="margin-top:16px;background:var(--s2);border-radius:var(--r2);padding:14px;font-size:11px;color:var(--tx2);line-height:1.8;">
+        <div style="font-weight:700;color:var(--am);margin-bottom:6px;">Apps Script'i nasıl güncellersin:</div>
+        <div>1. <a href="https://script.google.com" target="_blank" style="color:var(--bl);">script.google.com</a>'u aç</div>
+        <div>2. Projeyi bul → mevcut kodu <strong>tamamen sil</strong></div>
+        <div>3. Aşağıdaki "Yeni Apps Script Kodu"nu yapıştır</div>
+        <div>4. 💾 Kaydet → Dağıt → <strong>Mevcut dağıtımı güncelle</strong></div>
+        <div>5. URL aynı kalır — burada değişiklik gerekmez ✓</div>
+      </div>
+
+      <div style="margin-top:12px;">
+        <button class="xbtn s" style="width:auto;padding:7px 14px;margin:0;font-size:11px;" onclick="copyAppsScript()">📋 Apps Script Kodunu Kopyala</button>
+      </div>
+
+      <div class="separator" style="height:1px;background:var(--b);margin:16px 0;"></div>
+      <div class="fs-sec">Dükkan Bilgisi</div>
+      <div class="fg-2">
+        <div class="fg"><label>Dükkan Adı</label><input type="text" id="cfg-shop-name" placeholder="Bakkal Adı"></div>
+        <div class="fg"><label>Şehir / Semt</label><input type="text" id="cfg-shop-loc" placeholder="İstanbul, Beşiktaş"></div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="xbtn s" style="width:auto;padding:8px 14px;margin:0;" onclick="closeOv('ov-settings')">İptal</button>
+      <button class="xbtn p" style="width:auto;padding:8px 20px;margin:0;" onclick="saveSettings()">💾 Kaydet</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="t-ic"></span><span id="t-ms"></span></div>
 <div id="print-area"></div>
 
+<!-- SheetJS for Excel import -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 /* ═══════════════ AUDIO ═══════════════ */
 const AC = window.AudioContext || window.webkitAudioContext;
@@ -810,126 +971,207 @@ function save(){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){toast
 function load(){try{const r=localStorage.getItem(KEY);if(r)db={...db,...JSON.parse(r)};}catch(e){}}
 
 /* ═══════════════ GOOGLE SHEETS SYNC ═══════════════ */
-// Mevcut veresiye defteri Apps Script URL'si
-const GS_API = 'https://script.google.com/macros/s/AKfycbxxI2wmIVzDw9HKVhxQ4dvTMw-ZjAm6yWNIp3b2Xz1enJpqfQrVOd9Z5ErX4mKgrzYc/exec';
+/*
+  ┌─────────────────────────────────────────────────────────┐
+  │  MİMARİ AÇIKLAMASI                                       │
+  │                                                          │
+  │  GitHub Pages  → HTML dosyasını barındırır (tarayıcı)   │
+  │  Apps Script   → Google sunucusunda mini backend         │
+  │  Google Sheets → Veritabanın                             │
+  │                                                          │
+  │  Bunlar 3 ayrı sistem. GitHub'a ne yüklersen yükle,     │
+  │  Apps Script'i ayrıca Google'da güncellemelisin.         │
+  └─────────────────────────────────────────────────────────┘
+*/
+
+// Apps Script URL — settings'ten okunur, yoksa sabit URL
+function getGsApi() {
+  return localStorage.getItem('bkl_gs_api') ||
+    'https://script.google.com/macros/s/AKfycbxxI2wmIVzDw9HKVhxQ4dvTMw-ZjAm6yWNIp3b2Xz1enJpqfQrVOd9Z5ErX4mKgrzYc/exec';
+}
+
+// ══════════════════════════════════════════════════
+//  SYNC MİMARİSİ
+//  • localStorage = ana hafıza (offline ÇALIŞIR)
+//  • Google Sheets = otomatik yedek + çoklu cihaz
+//  • İnternet yoksa → kuyruğa eklenir, gelince gönderilir
+// ══════════════════════════════════════════════════
+let gsQueue = [];
 let gsSyncing = false;
+function loadQueue(){ try{gsQueue=JSON.parse(localStorage.getItem('bkl_q')||'[]');}catch(e){gsQueue=[];} }
+function saveQueue(){ localStorage.setItem('bkl_q', JSON.stringify(gsQueue)); }
+function queueCount(){ return gsQueue.length; }
 
 function setSyncUI(state, msg) {
-  const bar = document.getElementById('gs-bar');
   const dot = document.getElementById('gs-dot');
   const txt = document.getElementById('gs-txt');
-  if (!bar) return;
-  bar.dataset.state = state;
-  txt.textContent = msg;
-  dot.style.background = state==='ok'?'var(--gr)': state==='syncing'?'var(--am)':'var(--rd)';
-  dot.style.animation = state==='syncing'?'gs-pulse 0.8s infinite':'none';
+  if (!dot) return;
+  const colors = {ok:'var(--gr)', syncing:'var(--am)', err:'var(--rd)', queue:'var(--bl)', offline:'var(--tx3)'};
+  dot.style.background = colors[state] || 'var(--tx3)';
+  dot.style.animation = state==='syncing' ? 'gs-pulse 0.8s infinite' : 'none';
+  const q = queueCount();
+  txt.textContent = q > 0 ? `${msg} · ${q} bekliyor` : msg;
 }
 
-// VERESİYE: Google Sheets'ten müşteri datasını yükle
-async function gsLoadCustomers() {
-  setSyncUI('syncing','Veresiye yükleniyor...');
-  try {
-    const res = await fetch(GS_API, {cache:'no-cache'});
-    const text = await res.text();
-    if (text && text.trim().startsWith('[')) {
-      const gsCustomers = JSON.parse(text);
-      // Merge: GS verisi varsa onu kullan, local'deki ürünler/satışlar korunur
-      if (gsCustomers.length > 0) {
-        // GS formatını POS formatına çevir
-        db.customers = gsCustomers.map(c => ({
-          id: c.id || uid(),
-          name: c.name,
-          phone: c.phone || c.tel || '',
-          limit: parseFloat(c.limit) || 0,
-          balance: parseFloat(c.balance) || c.transactions?.reduce((a,t)=>t.type==='debt'?a+t.amount:a-t.amount,0) || 0,
-          txs: (c.transactions||c.txs||[]).map(t=>({
-            type: t.type==='debt'?'veresiye':(t.type||'nakit'),
-            amount: parseFloat(t.amount)||0,
-            date: t.ts ? new Date(t.ts).toISOString() : (t.date||new Date().toISOString()),
-            items: t.items||[],
-            note: t.note||''
-          }))
-        }));
-        save();
-      }
-      setSyncUI('ok','Veresiye senkronize ✓');
-    } else {
-      setSyncUI('ok','Bağlı');
-    }
-  } catch(e) {
-    setSyncUI('err','Sheets bağlantı hatası');
-    console.warn('GS load error:', e);
-  }
-}
-
-// VERESİYE: Müşteri datasını Google Sheets'e kaydet
-async function gsSaveCustomers() {
-  if (gsSyncing) return;
+// Kuyruktaki işlemleri sırayla gönder
+async function processQueue() {
+  if (gsSyncing || gsQueue.length === 0) return;
+  if (!navigator.onLine) { setSyncUI('offline', 'Çevrimdışı'); return; }
   gsSyncing = true;
-  setSyncUI('syncing','Veresiye kaydediliyor...');
-  try {
-    // Veresiye defteri formatına çevir
-    const gsFormat = db.customers.map(c => ({
-      id: c.id,
-      name: c.name,
-      phone: c.phone||'',
-      limit: c.limit||0,
-      balance: c.balance||0,
-      transactions: (c.txs||[]).map(t=>({
-        id: uid(),
-        type: t.type==='veresiye'?'debt':'payment',
-        amount: t.amount,
-        note: t.note||'',
-        ts: new Date(t.date||Date.now()).getTime()
-      }))
-    }));
-    await fetch(GS_API, {method:'POST', body: JSON.stringify(gsFormat)});
-    setSyncUI('ok','Kaydedildi ✓');
-    setTimeout(()=>setSyncUI('ok','Bağlı'),2500);
-  } catch(e) {
-    setSyncUI('err','Kayıt hatası');
+  setSyncUI('syncing', 'Kaydediliyor');
+  const api = getGsApi();
+  let failCount = 0;
+  while (gsQueue.length > 0 && failCount < 3) {
+    const item = gsQueue[0];
+    try {
+      // no-cors: Apps Script CORS header döndürmez, response okunamaz
+      // ama POST gerçekleşir. Hata FIRLATIRSA offline demektir.
+      await fetch(api, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(item)
+      });
+      gsQueue.shift();
+      saveQueue();
+    } catch(e) {
+      failCount++;
+      break; // bağlantı koptu, sonra tekrar dene
+    }
   }
   gsSyncing = false;
-}
-
-// SATIŞ: Google Sheets'e satış satırı gönder (Apps Script'i güncellemeniz gerekiyor)
-async function gsSendSale(sale) {
-  try {
-    const row = {
-      action: 'sale',
-      id: sale.id,
-      tarih: new Date(sale.date).toLocaleDateString('tr-TR'),
-      saat: new Date(sale.date).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}),
-      urunler: (sale.items||[]).map(i=>`${i.name} x${i.qty}`).join(', '),
-      toplam: sale.total,
-      indirim: sale.discount||0,
-      odeme: sale.method,
-      musteri: sale.customer||'',
-      not: sale.note||''
-    };
-    await fetch(GS_API, {method:'POST', body: JSON.stringify(row)});
-  } catch(e) {
-    console.warn('Sale sync error:', e);
-    // Satış yerel kaydedildi, sheets'e gitmese de sorun değil
+  if (gsQueue.length > 0) {
+    setSyncUI('queue', 'Bekliyor');
+  } else {
+    setSyncUI('ok', 'Yedeklendi ✓');
+    setTimeout(() => setSyncUI('ok', 'Bağlı'), 2500);
   }
 }
 
-// 30 saniyede bir GS'yi kontrol et (veresiye güncellenmiş mi?)
-setInterval(async()=>{
-  if(document.hidden) return;
+function queueAndSync(payload) {
+  gsQueue.push(payload);
+  saveQueue();
+  setSyncUI('queue', 'Kaydediliyor');
+  setTimeout(processQueue, 150);
+}
+
+// VERESİYE + ÜRÜN tam senkronizasyon (okunabilir tablolar + teknik veri)
+function gsSyncAll() {
+  const customers = db.customers.map(c => ({
+    id: c.id, name: c.name, phone: c.phone||'',
+    limit: c.limit||0, balance: c.balance||0,
+    transactions: (c.txs||[]).map(t=>({
+      id: uid(),
+      type: t.type==='veresiye' ? 'debt' : 'payment',
+      amount: t.amount, note: t.note||'',
+      ts: new Date(t.date||Date.now()).getTime()
+    }))
+  }));
+  const products = db.products.map(p=>({
+    barcode:p.barcode, name:p.name, cat:p.cat,
+    price:p.price, cost:p.cost||0,
+    stock:p.stock, minStock:p.minStock
+  }));
+  queueAndSync({ type:'sync', customers, products });
+}
+
+// Sadece veresiye güncellendiğinde
+function gsSaveCustomers() { gsSyncAll(); }
+
+// SATIŞ → Satislar sekmesine (her ürün ayrı satır)
+function gsSendSale(sale) {
+  queueAndSync({
+    type: 'sale',
+    id: sale.id,
+    items: (sale.items||[]).map(i=>({name:i.name, price:i.unitPrice, qty:i.qty})),
+    toplam: sale.total,
+    tarih: new Date(sale.date).toLocaleDateString('tr-TR'),
+    saat: new Date(sale.date).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}),
+    odeme: sale.method==='ver'?'Veresiye':sale.method==='kart'?'Kart':'Nakit',
+    musteri: sale.customer||'',
+    aciklama: sale.note||''
+  });
+  // Satıştan sonra stok da değiştiği için ürün tablosunu da güncelle
+  setTimeout(gsSyncAll, 500);
+}
+
+// VERESİYE + ÜRÜN ← Sheets'ten yükle (yeni {customers,products} formatı)
+async function gsLoadCustomers() {
+  const api = getGsApi();
+  setSyncUI('syncing', 'Yükleniyor');
   try {
-    const res = await fetch(GS_API,{cache:'no-cache'});
+    const res = await fetch(api, {cache:'no-cache'});
     const text = await res.text();
-    if(text&&text.trim().startsWith('[')){
-      const fresh = JSON.parse(text);
-      if(fresh.length>0 && JSON.stringify(fresh.map(c=>c.id+c.balance)) !== JSON.stringify(db.customers.map(c=>c.id+c.balance))){
-        await gsLoadCustomers();
-        renderVer();
-        toast('Veresiye güncellendi','info');
+    let data;
+    try { data = JSON.parse(text); } catch(e){ data = null; }
+
+    // Yeni format: {customers:[...], products:[...]}
+    if (data && data.customers) {
+      if (data.customers.length > 0) {
+        db.customers = data.customers.map(mapCustomer);
+        save();
       }
+      setSyncUI('ok', 'Bağlı');
+      return true;
     }
-  } catch(e){}
-}, 30000);
+    // Eski format: doğrudan array
+    if (Array.isArray(data) && data.length > 0) {
+      db.customers = data.map(mapCustomer);
+      save();
+      setSyncUI('ok', 'Bağlı');
+      return true;
+    }
+    setSyncUI('ok', 'Bağlı');
+    return false;
+  } catch(e) {
+    setSyncUI(navigator.onLine ? 'err' : 'offline', navigator.onLine ? 'Bağlantı hatası' : 'Çevrimdışı');
+    return false;
+  }
+}
+
+function mapCustomer(c){
+  return {
+    id: c.id || uid(), name: c.name,
+    phone: c.phone||c.tel||'',
+    limit: parseFloat(c.limit)||0,
+    balance: parseFloat(c.balance) ||
+      (c.transactions||[]).reduce((a,t)=>t.type==='debt'?a+t.amount:a-t.amount, 0) || 0,
+    txs: (c.transactions||c.txs||[]).map(t=>({
+      type: t.type==='debt' ? 'veresiye' : (t.type||'nakit'),
+      amount: parseFloat(t.amount)||0,
+      date: t.ts ? new Date(t.ts).toISOString() : (t.date||new Date().toISOString()),
+      items: t.items||[], note: t.note||''
+    }))
+  };
+}
+
+// İnternet geri geldiğinde otomatik kuyruk boşalt
+window.addEventListener('online', () => { setSyncUI('ok','Bağlandı'); processQueue(); });
+window.addEventListener('offline', () => setSyncUI('offline','Çevrimdışı'));
+
+// 60s polling — başka cihazdan veresiye değişti mi?
+setInterval(async () => {
+  if (document.hidden || gsQueue.length > 0 || !navigator.onLine) return;
+  const api = getGsApi();
+  try {
+    const res = await fetch(api, {cache:'no-cache'});
+    const text = await res.text();
+    let data; try{data=JSON.parse(text);}catch(e){return;}
+    const fresh = data && data.customers ? data.customers : (Array.isArray(data)?data:null);
+    if (!fresh) return;
+    const freshSig = JSON.stringify(fresh.map(c=>c.id+(c.balance||0)).sort());
+    const localSig = JSON.stringify(db.customers.map(c=>c.id+(c.balance||0)).sort());
+    if (fresh.length > 0 && freshSig !== localSig) {
+      db.customers = fresh.map(mapCustomer);
+      save(); renderVer();
+      toast('Veresiye başka cihazdan güncellendi', 'info');
+    }
+  } catch(e) {}
+}, 60000);
+
+// Kuyruk tekrar deneme — 20s'de bir
+setInterval(() => { if (gsQueue.length > 0 && !gsSyncing && navigator.onLine) processQueue(); }, 20000);
+
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function todayISO(){return new Date().toISOString().split('T')[0];}
 function fTL(n){return '₺'+(+n||0).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});}
@@ -966,8 +1208,26 @@ sinput.addEventListener('keydown',e=>{
   if(e.key==='Enter'){
     clearTimeout(scanTimer);
     const v=sinput.value.trim();
-    if(v){addToCart(v);sinput.value='';scanBuf='';}
+    if(v){
+      // Input dolu → barkod ekle
+      addToCart(v);sinput.value='';scanBuf='';
+    } else if(cart.length){
+      // Input BOŞ + sepet dolu → NAKİT satış
+      openPay('nakit');
+    }
     e.preventDefault();
+  }
+  if(e.key===' '){
+    // Space → Veresiye (input boşsa)
+    if(!sinput.value.trim() && cart.length){
+      e.preventDefault();
+      openPay('ver');
+    }
+  }
+  if((e.key==='k'||e.key==='K') && !sinput.value.trim() && cart.length){
+    // K → Kart (input boşsa)
+    e.preventDefault();
+    openPay('kart');
   }
 });
 
@@ -977,17 +1237,24 @@ document.getElementById('p-pos').addEventListener('click',e=>{
     sinput.focus();
 });
 
-// Keyboard shortcuts
+// Global keyboard shortcuts
 document.addEventListener('keydown',e=>{
-  if(document.querySelector('.ov.show')) return;
-  if(document.activeElement===sinput && e.key!=='F1' && e.key!=='F2' && e.key!=='F3' && e.key!=='Escape') return;
-  if(e.key==='F1'){e.preventDefault();openPay('nakit');}
-  if(e.key==='F2'){e.preventDefault();openPay('kart');}
-  if(e.key==='F3'){e.preventDefault();openPay('ver');}
+  const modalOpen=document.querySelector('.ov.show');
+
+  // Veresiye modali açıkken Enter → seçili müşteri ile tamamla
+  if(modalOpen && modalOpen.id==='ov-pay' && e.key==='Enter'){
+    e.preventDefault();
+    if(selCustId) confirmSale();
+    else toast('Önce müşteri seç','err');
+    return;
+  }
+  if(modalOpen) return;
+
+  // Esc → sepeti temizle
   if(e.key==='Escape'){e.preventDefault();clearCart(true);}
   if(e.key==='Delete' && selectedBarcode){e.preventDefault();removeFromCart(selectedBarcode);}
-  if((e.key='+' || e.key==='=') && selectedBarcode){e.preventDefault();changeQty(selectedBarcode,1);}
-  if(e.key==='-' && selectedBarcode){e.preventDefault();changeQty(selectedBarcode,-1);}
+  if((e.key==='+'||e.key==='=') && selectedBarcode){e.preventDefault();changeQty(selectedBarcode,1);}
+  if(e.key==='-' && selectedBarcode && !sinput.value){e.preventDefault();changeQty(selectedBarcode,-1);}
 });
 
 function addToCart(barcode){
@@ -1143,25 +1410,29 @@ function ledFlash(type){
 function openPay(method){
   if(!cart.length) return;
   payMode=method; selCustId=null;
+
+  // F1 NAKİT & F2 KART → direkt tamamla, modal yok
+  if(method==='nakit'||method==='kart'){
+    confirmSale();
+    return;
+  }
+
+  // F3 VERESİYE → müşteri seçim modali
   const total=getTotal();
-  const titles={nakit:'💵 Nakit Satış',kart:'💳 Kart ile Ödeme',ver:'📒 Veresiyeye Yaz'};
-  document.getElementById('pay-title').textContent=titles[method]||method;
-  // Receipt
+  document.getElementById('pay-title').textContent='📒 Veresiyeye Yaz';
   const disc=parseFloat(document.getElementById('disc-inp').value)||0;
   let html=cart.map(c=>`<div class="rcpt-item"><span>${esc(c.name)} ${c.qty>1?`<span style="color:var(--tx3);font-size:10px;">x${c.qty}</span>`:''}</span><span style="font-family:var(--fm);font-weight:600;">${fTL(c.unitPrice*c.qty)}</span></div>`).join('');
   if(disc>0) html+=`<div class="rcpt-item" style="color:var(--gr);"><span>İndirim</span><span style="font-family:var(--fm);">-${fTL(disc)}</span></div>`;
   html+=`<div class="rcpt-total"><span>TOPLAM</span><span class="rcpt-total-v">${fTL(total)}</span></div>`;
   document.getElementById('pay-rcpt').innerHTML=html;
-  // Change calc for nakit
-  const cc=document.getElementById('change-calc');
-  if(method==='nakit'){cc.style.display='block';document.getElementById('cc-inp').value='';document.getElementById('change-result').style.display='none';document.getElementById('qa-exact').textContent='Tam: '+fTL(total);}
-  else cc.style.display='none';
-  // Customer section
-  const cs=document.getElementById('cust-section');
-  if(method==='ver'){cs.style.display='block';renderCustGrid();}
-  else cs.style.display='none';
+  document.getElementById('change-calc').style.display='none';
+  document.getElementById('cust-section').style.display='block';
+  renderCustGrid();
   document.getElementById('ov-pay').classList.add('show');
-  if(method==='nakit') setTimeout(()=>document.getElementById('cc-inp').focus(),200);
+  setTimeout(()=>{
+    const si=document.getElementById('cust-search');
+    if(si){si.value='';renderCustGrid();si.focus();}
+  },150);
 }
 
 function getTotal(){
@@ -1192,11 +1463,30 @@ function calcChange(){
 
 function renderCustGrid(){
   const g=document.getElementById('cust-grid');
-  if(!db.customers.length){g.innerHTML='<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--tx3);font-size:12px;">Müşteri yok. Aşağıdan ekle.</div>';return;}
-  g.innerHTML=db.customers.map(c=>`<button class="cg-btn ${selCustId===c.id?'sel':''}" onclick="selCust('${c.id}')"><div class="cgb-n">${esc(c.name)}</div><div class="cgb-b">Bakiye: ${fTL(c.balance||0)}</div><div class="cgb-l">${c.limit>0?'Limit: '+fTL(c.limit):'Limitsiz'}</div></button>`).join('');
+  const q=(document.getElementById('cust-search')?.value||'').toLowerCase().trim();
+  // Bakiyeye göre büyükten küçüğe sırala
+  let list=[...db.customers].sort((a,b)=>(b.balance||0)-(a.balance||0));
+  // Arama filtresi
+  if(q) list=list.filter(c=>c.name.toLowerCase().includes(q));
+  if(!list.length){
+    g.innerHTML=`<div style="grid-column:1/-1;text-align:center;padding:16px;color:var(--tx3);font-size:12px;">${q?'Müşteri bulunamadı':'Müşteri yok. Aşağıdan ekle.'}</div>`;
+    return;
+  }
+  g.innerHTML=list.map(c=>`
+    <button class="cg-btn ${selCustId===c.id?'sel':''}" onclick="selCust('${c.id}')">
+      <div class="cgb-n" style="color:#f1f1f3;">${esc(c.name)}</div>
+      <div class="cgb-b">Bakiye: ${fTL(c.balance||0)}</div>
+      <div class="cgb-l">${c.limit>0?'Limit: '+fTL(c.limit):'Limitsiz'}</div>
+    </button>`).join('');
 }
 
-function selCust(id){selCustId=id;renderCustGrid();}
+function selCust(id){
+  selCustId=id;
+  renderCustGrid();
+  // Seçince arama kutusunu temizle ve odaktan çık
+  const si=document.getElementById('cust-search');
+  if(si) si.blur();
+}
 
 function confirmSale(){
   if(payMode==='ver'&&!selCustId){toast('Müşteri seç','err');return;}
@@ -1629,9 +1919,11 @@ function toast(msg,type='ok'){
 }
 function updateClock(){document.getElementById('clk').textContent=new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});}
 
-/* ═══════════════ ÜRÜN KATALOĞU (~200 ürün) ═══════════════ */
+/* ═══════════════ ÜRÜN KATALOĞU ═══════════════ */
 function seed(){
-  if(db.products.length) return;
+  // Versiyon kontrolü — v5 kataloğu yüklüyse tekrar yükleme
+  if(db.productVersion === 5 && db.products.length >= 100) return;
+  db.productVersion = 5;
   db.products=[
   /* ── SİGARA / TÜTÜN ── */
   {barcode:'8690804530015',name:'Marlboro Kırmızı',price:84,cost:70,cat:'sigara',unit:'paket',kdv:'20',stock:50,minStock:10},
@@ -1875,13 +2167,327 @@ function seed(){
   save();
 }
 
+/* ═══════════════ ÜRÜN İÇE AKTAR ═══════════════ */
+let importData_pending = [];
+
+function openImportModal() {
+  switchImpTab('file');
+  document.getElementById('imp-preview').style.display='none';
+  document.getElementById('imp-confirm-btn').disabled=true;
+  importData_pending=[];
+  document.getElementById('ov-import').classList.add('show');
+}
+
+function switchImpTab(tab) {
+  ['file','gs','tpl'].forEach(t=>{
+    const btn=document.getElementById('imp-tab-'+t);
+    const panel=document.getElementById('imp-panel-'+t);
+    const isActive=t===tab;
+    btn.style.borderColor = isActive?'var(--am)':'var(--b)';
+    btn.style.background = isActive?'var(--am-d)':'none';
+    btn.style.color = isActive?'var(--am)':'var(--tx2)';
+    if(panel) panel.style.display=isActive?'block':'none';
+  });
+}
+
+function handleFileDrop(e) {
+  e.preventDefault();
+  document.getElementById('drop-zone').style.borderColor='var(--b2)';
+  const file=e.dataTransfer.files[0];
+  if(file) parseImportFile(file);
+}
+
+function handleFileSelect(input) {
+  const file=input.files[0];
+  if(file) parseImportFile(file);
+}
+
+function parseImportFile(file) {
+  if(!window.XLSX){toast('XLSX kütüphanesi yükleniyor...','info');return;}
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const rows=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      processImportRows(rows);
+    }catch(ex){toast('Dosya okunamadı: '+ex.message,'err');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+async function importFromGS() {
+  const url=document.getElementById('gs-import-url').value.trim();
+  if(!url){toast('URL gir','err');return;}
+  // Sheets'ten CSV export URL'si oluştur
+  const match=url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if(!match){toast('Geçersiz Google Sheets URL','err');return;}
+  const id=match[1];
+  const csvUrl=`https://docs.google.com/spreadsheets/d/${id}/export?format=csv`;
+  setSyncUI('syncing','Ürünler çekiliyor...');
+  try{
+    const res=await fetch(csvUrl);
+    const text=await res.text();
+    const rows=text.split('\n').map(r=>r.split(',').map(c=>c.replace(/^"|"$/g,'').trim()));
+    processImportRows(rows);
+    setSyncUI('ok','Çekildi ✓');
+  }catch(e){
+    setSyncUI('err','Çekilemedi');
+    toast('Hata: Sheets herkese açık mı kontrol et','err');
+  }
+}
+
+function processImportRows(rows) {
+  if(rows.length<2){toast('Veri bulunamadı','err');return;}
+  const headers=rows[0].map(h=>String(h).toLowerCase().trim());
+  // Esnek sütun eşleştirme
+  const col=(names)=>{
+    for(const n of names){const i=headers.findIndex(h=>h.includes(n));if(i>=0)return i;}
+    return -1;
+  };
+  const cBC=col(['barkod','barcode','kod','ean']);
+  const cAD=col(['ad','ürün','isim','name','ürün adı','product']);
+  const cFY=col(['satış','fiyat','price','satis fiyati','satış fiyatı']);
+  const cAL=col(['alış','maliyet','cost','alış fiyatı']);
+  const cKT=col(['kategori','category','cat','tür','tip']);
+  const cST=col(['stok','stock','adet','miktar']);
+  const cMN=col(['min','minimum','uyarı','minstock']);
+
+  const catMap={'sigara':['sigara','tütün','tobacco'],'icecek':['içecek','icecek','drink','su','kola','meyve'],'kuru-gida':['kuru','gıda','gida','bakliyat','baharat','makarna'],'sut':['süt','sut','peynir','yoğurt','yogurt','dairy'],'atistirmalik':['atıştır','atistir','çikolata','bisküvi','cips','kuruyemiş'],'temizlik':['temizlik','deterjans','sabun','kağıt','kagit']};
+  function guessCat(s){
+    s=(s||'').toLowerCase();
+    for(const[cat,kws]of Object.entries(catMap)){if(kws.some(k=>s.includes(k)))return cat;}
+    return 'diger';
+  }
+
+  const products=[];
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];
+    if(!r||!r.some(Boolean)) continue;
+    const bc=cBC>=0?String(r[cBC]||'').trim():'';
+    const name=cAD>=0?String(r[cAD]||'').trim():'';
+    if(!bc||!name) continue;
+    const price=parseFloat(cFY>=0?r[cFY]:0)||0;
+    const cost=parseFloat(cAL>=0?r[cAL]:0)||0;
+    const catRaw=cKT>=0?String(r[cKT]||'').trim():'';
+    const cat=Object.keys(CAT).includes(catRaw)?catRaw:guessCat(catRaw||name);
+    const stock=cST>=0?parseInt(r[cST]):undefined;
+    const minStock=cMN>=0?parseInt(r[cMN]):undefined;
+    products.push({barcode:bc,name,price,cost,cat,unit:'adet',kdv:'8',stock,minStock});
+  }
+
+  if(!products.length){toast('Ürün bulunamadı. Sütun isimlerini kontrol et.','err');return;}
+  importData_pending=products;
+  showImportPreview(products.slice(0,8),products.length);
+  document.getElementById('imp-confirm-btn').disabled=false;
+}
+
+function showImportPreview(sample,total) {
+  document.getElementById('imp-preview').style.display='block';
+  document.getElementById('imp-preview-lbl').textContent=`Önizleme — ${total} ürün bulundu`;
+  const rows=sample.map(p=>`<tr>
+    <td style="padding:6px 10px;border-bottom:1px solid var(--b);font-family:var(--fm);font-size:10px;color:var(--tx3);">${esc(p.barcode)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid var(--b);font-size:11px;">${esc(p.name)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid var(--b);font-family:var(--fm);font-size:11px;color:var(--am);">${fTL(p.price)}</td>
+    <td style="padding:6px 10px;border-bottom:1px solid var(--b);"><span class="pi-cat cat-${p.cat}" style="padding:2px 6px;border-radius:3px;font-size:9px;font-family:var(--fm);">${CAT[p.cat]||p.cat}</span></td>
+    <td style="padding:6px 10px;border-bottom:1px solid var(--b);font-size:11px;color:var(--tx2);">${p.stock??'—'}</td>
+  </tr>`).join('');
+  document.getElementById('imp-preview-table').innerHTML=`<table style="width:100%;border-collapse:collapse;">
+    <thead><tr style="background:var(--s3);">
+      <th style="padding:6px 10px;text-align:left;font-size:10px;font-family:var(--fm);color:var(--tx3);">BARKOD</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;font-family:var(--fm);color:var(--tx3);">ÜRÜN ADI</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;font-family:var(--fm);color:var(--tx3);">FİYAT</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;font-family:var(--fm);color:var(--tx3);">KATEGORİ</th>
+      <th style="padding:6px 10px;text-align:left;font-size:10px;font-family:var(--fm);color:var(--tx3);">STOK</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function applyImport() {
+  if(!importData_pending.length) return;
+  const merge=document.getElementById('imp-replace').checked;
+  let added=0,updated=0;
+  importData_pending.forEach(p=>{
+    const idx=db.products.findIndex(x=>x.barcode===p.barcode);
+    if(idx>=0){db.products[idx]={...db.products[idx],...p};updated++;}
+    else{db.products.push(p);added++;}
+  });
+  save();renderProds();checkLowStock();closeOv('ov-import');
+  toast(`✅ ${added} eklendi, ${updated} güncellendi`,'ok');
+  importData_pending=[];
+}
+
+function downloadTemplate() {
+  const header=['Barkod','Ad','SatisFiyati','AlisFiyati','Kategori','Stok','MinStok','Birim','KDV','RafYeri'];
+  const rows=[header,...db.products.map(p=>[p.barcode,p.name,p.price,p.cost||0,p.cat,p.stock??'',p.minStock||'',p.unit||'adet',p.kdv||8,p.raf||''])];
+  dlCSV(rows,'bakkal_urunler_sablonu.csv');
+  toast('Şablon indirildi','ok');
+}
+
+/* ═══════════════ AYARLAR ═══════════════ */
+function openSettings() {
+  document.getElementById('cfg-gs-url').value = getGsApi();
+  document.getElementById('cfg-shop-name').value = localStorage.getItem('bkl_shop_name')||'';
+  document.getElementById('cfg-shop-loc').value = localStorage.getItem('bkl_shop_loc')||'';
+  document.getElementById('gs-test-result').textContent='';
+  document.getElementById('ov-settings').classList.add('show');
+}
+
+function saveSettings() {
+  const url=document.getElementById('cfg-gs-url').value.trim();
+  if(url) localStorage.setItem('bkl_gs_api',url);
+  localStorage.setItem('bkl_shop_name',document.getElementById('cfg-shop-name').value.trim());
+  localStorage.setItem('bkl_shop_loc',document.getElementById('cfg-shop-loc').value.trim());
+  closeOv('ov-settings');
+  toast('Ayarlar kaydedildi','ok');
+}
+
+function forceSyncNow(){
+  gsSyncAll();
+  toast('Tüm veri Sheets\'e gönderiliyor...','info');
+}
+
+async function testGsConnection() {
+  const url=document.getElementById('cfg-gs-url').value.trim();
+  if(!url){toast('URL gir','err');return;}
+  const el=document.getElementById('gs-test-result');
+  el.textContent='Test ediliyor...';el.style.color='var(--am)';
+  try{
+    const res=await fetch(url,{cache:'no-cache'});
+    const text=await res.text();
+    if(text&&(text.trim().startsWith('[')||text.trim().startsWith('{'))){
+      el.textContent='✅ Bağlantı başarılı!';el.style.color='var(--gr)';
+    } else {
+      el.textContent='⚠️ Yanıt geldi ama format beklenmedik';el.style.color='var(--am)';
+    }
+  }catch(e){
+    el.textContent='❌ Bağlantı kurulamadı';el.style.color='var(--rd)';
+  }
+}
+
+const APPS_SCRIPT_CODE = `// BAKKAL POS — Google Apps Script (FİNAL)
+// Mevcut kodu SİL, bunu yapıştır, Dağıt > Dağıtımları yönet > Yeni sürüm
+
+const SPREADSHEET_ID = '1-vFQHt0mL2KWLiMBjN2HoeFWuJqXN6wJVw6UqdV0DkE';
+
+function doGet(e){
+  try{
+    const ss=SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet=getSheet(ss,'_data');
+    const raw=sheet.getRange(1,1).getValue();
+    return json(raw&&raw.toString().trim()?raw.toString():'{"customers":[],"products":[]}');
+  }catch(err){return json(JSON.stringify({error:err.message}));}
+}
+
+function doPost(e){
+  try{
+    const body=JSON.parse(e.postData.contents);
+    const ss=SpreadsheetApp.openById(SPREADSHEET_ID);
+    if(body.type==='sale'){logSale(ss,body);return json('{"ok":true}');}
+    if(body.type==='sync'){
+      saveData(ss,body.customers||[],body.products||[]);
+      writeCustomerTable(ss,body.customers||[]);
+      writeProductTable(ss,body.products||[]);
+      return json('{"ok":true}');
+    }
+    if(Array.isArray(body)){saveData(ss,body,null);writeCustomerTable(ss,body);return json('{"ok":true}');}
+    return json('{"error":"unknown"}');
+  }catch(err){return json(JSON.stringify({error:err.message}));}
+}
+
+function logSale(ss,sale){
+  const sheet=getSheet(ss,'Satislar');
+  if(sheet.getLastRow()===0){
+    sheet.appendRow(['Ürün','Fiyat (₺)','Adet','Tutar (₺)','Tarih','Saat','Ödeme','Müşteri','Fiş No']);
+    sheet.getRange(1,1,1,9).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
+    sheet.setFrozenRows(1);sheet.setColumnWidth(1,200);
+  }
+  const items=sale.items||[];
+  if(items.length===0){
+    sheet.appendRow([sale.aciklama||'İşlem','','',sale.toplam||0,sale.tarih||'',sale.saat||'',sale.odeme||'',sale.musteri||'',sale.id||'']);
+  }else{
+    items.forEach(it=>sheet.appendRow([it.name||'',it.price||0,it.qty||1,(it.price||0)*(it.qty||1),sale.tarih||'',sale.saat||'',sale.odeme||'',sale.musteri||'',sale.id||'']));
+  }
+}
+
+function writeCustomerTable(ss,customers){
+  const sheet=getSheet(ss,'Veresiye');sheet.clear();
+  sheet.appendRow(['Müşteri','Telefon','Bakiye (₺)','Limit (₺)','İşlem','Son İşlem']);
+  sheet.getRange(1,1,1,6).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
+  sheet.setFrozenRows(1);sheet.setColumnWidth(1,180);
+  const sorted=customers.slice().sort((a,b)=>(b.balance||0)-(a.balance||0));
+  sorted.forEach(c=>{
+    const txs=c.transactions||c.txs||[];const last=txs.length?txs[txs.length-1]:null;
+    const ld=last?(last.ts?new Date(last.ts).toLocaleString('tr-TR'):(last.date||'')):'';
+    sheet.appendRow([c.name||'',c.phone||'',c.balance||0,c.limit||0,txs.length,ld]);
+  });
+  if(sorted.length)sheet.getRange(2,3,sorted.length,1).setFontColor('#d97706').setFontWeight('bold');
+}
+
+function writeProductTable(ss,products){
+  const sheet=getSheet(ss,'Urunler');sheet.clear();
+  sheet.appendRow(['Barkod','Ürün Adı','Kategori','Satış (₺)','Alış (₺)','Stok','Min','Durum']);
+  sheet.getRange(1,1,1,8).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
+  sheet.setFrozenRows(1);sheet.setColumnWidth(2,200);
+  products.forEach(p=>{
+    let d='';
+    if(p.stock!==undefined&&p.stock!==''&&p.stock!==null){
+      if(+p.stock<=0)d='❌ Tükendi';else if(p.minStock&&+p.stock<=+p.minStock)d='⚠️ Az';else d='✅ Yeterli';
+    }
+    sheet.appendRow([p.barcode||'',p.name||'',p.cat||'',p.price||0,p.cost||0,(p.stock!==undefined&&p.stock!=='')?p.stock:'',p.minStock||'',d]);
+  });
+}
+
+function saveData(ss,customers,products){
+  const sheet=getSheet(ss,'_data');
+  let ex={customers:[],products:[]};
+  try{const raw=sheet.getRange(1,1).getValue();if(raw)ex=JSON.parse(raw.toString());}catch(e){}
+  sheet.getRange(1,1).setValue(JSON.stringify({
+    customers:customers!==null?customers:ex.customers,
+    products:products!==null?products:ex.products,
+    updated:new Date().toISOString()
+  }));
+}
+
+function getSheet(ss,name){let s=ss.getSheetByName(name);if(!s)s=ss.insertSheet(name);return s;}
+function json(t){return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.JSON);}`;
+
+function copyAppsScript() {
+  navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(()=>{
+    toast('Kod kopyalandı! script.google.com\'a git, eskiyi sil, yapıştır.','ok');
+  }).catch(()=>{
+    const win=window.open('','_blank','width=700,height=600');
+    win.document.write('<pre style="font-family:monospace;font-size:12px;padding:16px;white-space:pre-wrap;">'+APPS_SCRIPT_CODE.replace(/</g,'&lt;')+'</pre>');
+  });
+}
+
 /* ═══════════════ INIT ═══════════════ */
+loadQueue();
 load();seed();checkLowStock();updateTedDatalist();
 updateClock();setInterval(updateClock,15000);
 document.getElementById('today-count').textContent=db.sales.filter(s=>s.date.startsWith(todayISO())).length;
 setTimeout(()=>sinput.focus(),100);
-// Google Sheets'ten veresiye datasını yükle
-gsLoadCustomers().then(()=>renderVer());
+
+// İlk açılış mantığı:
+// - Sheets sıfırlanacak (kullanıcı kararı), local veri esas
+// - İlk kez açılıyorsa local'i Sheets'e PUSH et
+// - Sonraki açılışlarda Sheets'ten kontrol et (çoklu cihaz)
+(async function initSync(){
+  const firstRun = !localStorage.getItem('bkl_synced_once');
+  if (firstRun && db.customers.length > 0) {
+    // Local veriyi Sheets'e gönder (Sheets'i bizim veriyle kur)
+    gsSyncAll();
+    localStorage.setItem('bkl_synced_once','1');
+    setTimeout(()=>{ renderVer(); }, 1000);
+  } else {
+    // Normal: Sheets'ten en güncel veriyi al
+    const ok = await gsLoadCustomers();
+    if (ok) renderVer();
+    localStorage.setItem('bkl_synced_once','1');
+  }
+  processQueue();
+})();
 </script>
 </body>
 </html>
