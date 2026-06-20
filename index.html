@@ -445,7 +445,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
 <!-- TOPBAR -->
 <div class="tb">
   <div class="tb-logo">🏪 Bakkal</div>
-  <button class="nb active" id="nb-pos" onclick="go('pos')"><span class="i">🖥️</span>Satış<span class="kbd">[F1-F3]</span></button>
+  <button class="nb active" id="nb-pos" onclick="go('pos')"><span class="i">🖥️</span>Satış</button>
   <button class="nb" id="nb-urun" onclick="go('urun')"><span class="i">▦</span>Ürünler</button>
   <button class="nb" id="nb-ver" onclick="go('ver')"><span class="i">📒</span>Veresiye</button>
   <button class="nb" id="nb-alim" onclick="go('alim')"><span class="i">📦</span>Alım</button>
@@ -573,6 +573,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         <option value="stock">Stoka göre</option><option value="sales">Çok satana göre</option>
       </select>
       <button class="xbtn p" style="width:auto;padding:6px 14px;margin:0;font-size:12px;white-space:nowrap;" onclick="openImportModal()">📥 İçe Aktar</button>
+      <button class="xbtn s" style="width:auto;padding:6px 12px;margin:0;font-size:11px;white-space:nowrap;" onclick="pullPricesFromSheets()">🔄 Sheets'ten Fiyat Çek</button>
       <button class="xbtn s" style="width:auto;padding:6px 10px;margin:0;font-size:11px;" onclick="exportCSV()">📤 Dışa Aktar</button>
     </div>
     <div class="prod-list" id="prod-list"></div>
@@ -890,6 +891,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         <div>Her satış <strong style="color:var(--tx);">önce cihaza</strong> kaydedilir — internet olmasa da çalışır.</div>
         <div>İnternet yokken işlemler <strong style="color:var(--tx);">kuyrukta</strong> bekler (gösterge mavi olur).</div>
         <div>Bağlantı gelince <strong style="color:var(--tx);">otomatik</strong> Sheets'e gönderilir. Veri kaybolmaz.</div>
+      </div>
+
+      <div style="background:var(--am-d);border:1px solid rgba(245,158,11,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
+        <div style="font-size:13px;font-weight:700;color:var(--am);margin-bottom:6px;">💰 Sheets'te fiyat değiştirdim, ne zaman yansır?</div>
+        <div>Uygulama <strong style="color:var(--tx);">açılışta</strong> ve her <strong style="color:var(--tx);">2 dakikada bir</strong> Sheets'teki "Urunler" sekmesini otomatik kontrol eder.</div>
+        <div>Hemen görmek istersen Ürünler → <strong style="color:var(--tx);">🔄 Sheets'ten Fiyat Çek</strong> butonuna bas.</div>
       </div>
 
       <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
@@ -2178,6 +2185,75 @@ function openImportModal() {
   document.getElementById('ov-import').classList.add('show');
 }
 
+// Sheets'teki Urunler sekmesinden GÜNCEL fiyatları çek (toplu zam için)
+// silent=true ise toast/uyarı göstermez, sadece sessizce günceller (otomatik kontrol için)
+async function pullPricesFromSheets(silent) {
+  const api = getGsApi();
+  if (!silent) {
+    setSyncUI('syncing','Fiyatlar çekiliyor');
+    toast('Sheets\'ten güncel fiyatlar çekiliyor...','info');
+  }
+  try {
+    const res = await fetch(api + (api.includes('?')?'&':'?') + 'action=products', {cache:'no-cache'});
+    const text = await res.text();
+    let sheetProducts;
+    try { sheetProducts = JSON.parse(text); } catch(e){ sheetProducts = null; }
+
+    if (!Array.isArray(sheetProducts) || sheetProducts.length === 0) {
+      if (!silent) {
+        setSyncUI('ok','Bağlı');
+        toast('Sheets\'te ürün bulunamadı. Önce bir kez yedekle.','err');
+      }
+      return;
+    }
+
+    let updated=0, added=0;
+    sheetProducts.forEach(sp => {
+      if (!sp.barcode) return;
+      const idx = db.products.findIndex(p => p.barcode === sp.barcode);
+      if (idx >= 0) {
+        // Mevcut ürün → fiyat/stok güncelle (diğer alanları koru)
+        const old = db.products[idx];
+        const changed = old.price !== sp.price || old.cost !== sp.cost || old.stock !== sp.stock;
+        db.products[idx] = {
+          ...old,
+          price: sp.price,
+          cost: sp.cost || old.cost,
+          stock: sp.stock !== undefined ? sp.stock : old.stock,
+          minStock: sp.minStock || old.minStock
+        };
+        if (changed) updated++;
+      } else {
+        // Yeni ürün → ekle
+        db.products.push({
+          barcode: sp.barcode, name: sp.name, cat: sp.cat||'diger',
+          price: sp.price, cost: sp.cost||0,
+          stock: sp.stock, minStock: sp.minStock,
+          unit: 'adet', kdv: '8'
+        });
+        added++;
+      }
+    });
+    save();
+    renderProds();
+    checkLowStock();
+
+    if (!silent) {
+      setSyncUI('ok','Güncellendi ✓');
+      setTimeout(()=>setSyncUI('ok','Bağlı'),2500);
+      toast(`✅ ${updated} fiyat güncellendi${added?`, ${added} yeni ürün`:''}`,'ok');
+    } else if (updated > 0 || added > 0) {
+      // Sessiz modda bile, gerçekten bir şey değiştiyse küçük bilgi ver
+      toast(`🔄 ${updated} fiyat Sheets'ten güncellendi`,'info');
+    }
+  } catch(e) {
+    if (!silent) {
+      setSyncUI('err','Hata');
+      toast('Çekilemedi: bağlantıyı kontrol et','err');
+    }
+  }
+}
+
 function switchImpTab(tab) {
   ['file','gs','tpl'].forEach(t=>{
     const btn=document.getElementById('imp-tab-'+t);
@@ -2374,10 +2450,23 @@ const SPREADSHEET_ID = '1-vFQHt0mL2KWLiMBjN2HoeFWuJqXN6wJVw6UqdV0DkE';
 function doGet(e){
   try{
     const ss=SpreadsheetApp.openById(SPREADSHEET_ID);
+    const action=(e&&e.parameter&&e.parameter.action)||'';
+    if(action==='products'){return json(JSON.stringify(readProducts(ss)));}
     const sheet=getSheet(ss,'_data');
     const raw=sheet.getRange(1,1).getValue();
     return json(raw&&raw.toString().trim()?raw.toString():'{"customers":[],"products":[]}');
   }catch(err){return json(JSON.stringify({error:err.message}));}
+}
+
+function readProducts(ss){
+  const sheet=ss.getSheetByName('Urunler');
+  if(!sheet||sheet.getLastRow()<2)return [];
+  const rows=sheet.getDataRange().getValues();const out=[];
+  for(let i=1;i<rows.length;i++){
+    const r=rows[i];const bc=String(r[0]||'').trim();if(!bc)continue;
+    out.push({barcode:bc,name:String(r[1]||'').trim(),cat:String(r[2]||'diger').trim(),price:parseFloat(r[3])||0,cost:parseFloat(r[4])||0,stock:(r[5]!==''&&r[5]!==null)?parseInt(r[5]):undefined,minStock:parseInt(r[6])||undefined});
+  }
+  return out;
 }
 
 function doPost(e){
@@ -2487,7 +2576,18 @@ setTimeout(()=>sinput.focus(),100);
     localStorage.setItem('bkl_synced_once','1');
   }
   processQueue();
+
+  // Sheets'teki Urunler sekmesinden GÜNCEL fiyatları otomatik çek
+  // (sessizce — toast göstermeden, sadece günceller)
+  setTimeout(()=>{ pullPricesFromSheets(true); }, 2000);
 })();
+
+// Her 2 dakikada bir Sheets'ten fiyat/stok kontrolü (sessiz)
+setInterval(()=>{
+  if (!document.hidden && navigator.onLine) {
+    pullPricesFromSheets(true);
+  }
+}, 120000);
 </script>
 </body>
 </html>
