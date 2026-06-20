@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>Bakkal POS</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0f0f11">
@@ -32,13 +32,14 @@ html,body{height:100%;overflow:hidden;font-size:14px;}
 body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;flex-direction:column;}
 
 /* ── TOPBAR ── */
-.tb{height:50px;background:var(--s1);border-bottom:1px solid var(--b);display:flex;align-items:center;padding:0 14px;gap:2px;flex-shrink:0;z-index:200;}
-.tb-logo{font-weight:700;font-size:15px;color:var(--am);padding-right:16px;border-right:1px solid var(--b);margin-right:8px;letter-spacing:-.3px;white-space:nowrap;}
-.nb{padding:7px 13px;border-radius:var(--r3);border:none;background:none;color:var(--tx2);font-family:var(--ff);font-size:13px;font-weight:500;cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;white-space:nowrap;}
+.tb{height:50px;background:var(--s1);border-bottom:1px solid var(--b);display:flex;align-items:center;padding:0 14px;gap:2px;flex-shrink:0;z-index:200;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+.tb::-webkit-scrollbar{display:none;}
+.tb-logo{font-weight:700;font-size:15px;color:var(--am);padding-right:16px;border-right:1px solid var(--b);margin-right:8px;letter-spacing:-.3px;white-space:nowrap;flex-shrink:0;}
+.nb{padding:7px 13px;border-radius:var(--r3);border:none;background:none;color:var(--tx2);font-family:var(--ff);font-size:13px;font-weight:500;cursor:pointer;transition:all .12s;display:flex;align-items:center;gap:5px;white-space:nowrap;flex-shrink:0;}
 .nb:hover{background:var(--s3);color:var(--tx);}
 .nb.active{background:var(--am-d);color:var(--am);}
 .nb .i{font-size:14px;}
-.tb-r{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.tb-r{margin-left:auto;display:flex;align-items:center;gap:10px;flex-shrink:0;}
 .clk{font-family:var(--fm);font-size:12px;color:var(--tx3);}
 .kbd-hint{font-size:10px;font-family:var(--fm);color:var(--tx3);background:var(--s3);border:1px solid var(--b);border-radius:3px;padding:2px 5px;}
 
@@ -445,6 +446,62 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
 .cat-diger{background:rgba(161,161,170,.14);color:#a1a1aa;}
 
 .tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;font-family:var(--fm);}
+
+/* ══════════════════════════════════════════════
+   MOBİL RESPONSIVE (telefon ekranları için)
+══════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  html,body{font-size:13px;}
+
+  /* Topbar: yatay scroll zaten aktif, dokunmatik için biraz büyüt */
+  .tb{padding:0 8px;height:46px;}
+  .nb{padding:8px 10px;font-size:12px;}
+  .nb .i{font-size:13px;}
+  .tb-logo{padding-right:10px;margin-right:4px;font-size:13px;}
+  .clk{display:none;}
+  #install-app-btn{display:none!important;}
+
+  /* POS: sepet + ödeme panelini alt alta diz */
+  #p-pos{flex-direction:column;}
+  .pos-l{flex:1;min-height:0;}
+  .pos-r{width:100%;border-left:none;border-top:1px solid var(--b);flex-shrink:0;}
+  .pay-wrap{flex-direction:row;flex-wrap:wrap;}
+  .pb{flex:1;min-width:100px;padding:14px 8px;font-size:13px;}
+  .pb .kbd{display:none;}
+
+  /* Ürünler: sol form + sağ liste alt alta */
+  #p-urun{flex-direction:column;overflow-y:auto;}
+  .urun-l{width:100%;border-right:none;border-bottom:1px solid var(--b);}
+  .urun-r{min-height:400px;}
+  .prod-toolbar{flex-direction:column;align-items:stretch;}
+  .prod-toolbar > *{width:100%;}
+
+  /* Alım: sol form + sağ liste alt alta */
+  #p-alim{flex-direction:column;overflow-y:auto;}
+  .alim-l{width:100%;border-right:none;border-bottom:1px solid var(--b);}
+
+  /* Dashboard: grid'leri tek sütuna indir */
+  .d-cards{grid-template-columns:repeat(2,1fr);}
+  .d-grid2,.d-grid3{grid-template-columns:1fr;}
+
+  /* Veresiye grid */
+  .ver-grid{grid-template-columns:1fr;}
+  .ver-top{flex-direction:column;align-items:stretch;}
+
+  /* Modal genişliği */
+  .modal,.modal-lg{width:92vw;max-width:480px;}
+  .cg{grid-template-columns:1fr;}
+
+  /* Scan bar */
+  .sbar-info{display:none;}
+  .undo-btn{font-size:10px;padding:5px 8px;}
+}
+
+@media (max-width: 420px) {
+  .d-cards{grid-template-columns:1fr 1fr;}
+  .dc-v{font-size:16px;}
+  .fg-2,.fg-3{grid-template-columns:1fr;}
+}
 </style>
 </head>
 <body>
@@ -909,6 +966,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         <div>Hemen görmek istersen Ürünler → <strong style="color:var(--tx);">🔄 Sheets'ten Fiyat Çek</strong> butonuna bas.</div>
       </div>
 
+      <div style="background:var(--pu-d);border:1px solid rgba(168,85,247,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
+        <div style="font-size:13px;font-weight:700;color:var(--pu);margin-bottom:6px;">🔒 Uzun süre (haftalarca) internetsiz kalırsam?</div>
+        <div>Tüm satış/veresiye verisi <strong style="color:var(--tx);">cihazda</strong> güvenle birikir, kaybolmaz.</div>
+        <div>25 satışta bir, hâlâ offline isen <strong style="color:var(--tx);">yedek dosyası indirmen</strong> için hatırlatma çıkar.</div>
+        <div>Ayrıca her kayıt otomatik <strong style="color:var(--tx);">2. bir güvenlik kopyası</strong> olarak da tutulur.</div>
+        <button class="xbtn s" style="width:auto;padding:6px 12px;margin-top:8px;font-size:11px;" onclick="restoreFromSafetyBackup()">♻️ Güvenlik Yedeğinden Geri Yükle</button>
+      </div>
+
       <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--gr);"></div> Bağlı</div>
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--am);"></div> Kaydediyor</div>
@@ -984,7 +1049,12 @@ const CAT={sigara:'Sigara',icecek:'İçecek','kuru-gida':'Kuru Gıda',sut:'Süt'
 const CATC={sigara:'var(--rd)',icecek:'var(--bl)','kuru-gida':'var(--am)',sut:'var(--gr)',atistirmalik:'var(--or)',temizlik:'var(--pu)',diger:'var(--tx3)'};
 
 let db={products:[],sales:[],customers:[],alimlar:[]};
-function save(){try{localStorage.setItem(KEY,JSON.stringify(db));}catch(e){toast('Kayıt hatası','err');}}
+function save(){
+  try{
+    localStorage.setItem(KEY,JSON.stringify(db));
+    writeSafetyBackup(); // ikinci kopya, ekstra güvenlik
+  }catch(e){toast('Kayıt hatası','err');}
+}
 function load(){try{const r=localStorage.getItem(KEY);if(r)db={...db,...JSON.parse(r)};}catch(e){}}
 
 /* ═══════════════ GOOGLE SHEETS SYNC ═══════════════ */
@@ -1524,6 +1594,7 @@ function confirmSale(){
     cust.txs.push({type:'veresiye',amount:total,date:sale.date,saleId:sale.id,items:cart.map(c=>({name:c.name,qty:c.qty,price:c.unitPrice})),note:''});
   }
   save();
+  checkBackupReminder(); // uzun süre offline kalındıysa yedek hatırlat
   // ── Google Sheets sync ──
   gsSendSale(sale);
   if(payMode==='ver'&&cust) gsSaveCustomers();
@@ -1888,6 +1959,93 @@ function exportData(){
   const a=document.createElement('a');a.href='data:application/json;charset=utf-8,'+encodeURIComponent(json);
   a.download='bakkal_yedek_'+todayISO()+'.json';a.click();toast('Yedek indirildi','ok');
 }
+
+/* ═══════════════════════════════════════════════
+   OTOMATİK GÜVENLİK YEDEĞİ
+   ─────────────────────────────────────────────
+   Uzun süre internetsiz kalınırsa (2 hafta gibi),
+   localStorage'ın kendisi tek koruma noktası olur.
+   Bu yüzden 2. bir kopya tutuyoruz (farklı key'de)
+   + her N satışta bir kullanıcıya dosya indirmesini
+   hatırlatıyoruz (tarayıcı/telefon arızasına karşı).
+═══════════════════════════════════════════════ */
+const BACKUP_KEY = 'bkl_v3_safety_backup';
+const BACKUP_REMINDER_KEY = 'bkl_last_backup_reminder';
+const BACKUP_SALE_COUNT_KEY = 'bkl_sales_since_backup';
+
+// Her save() çağrısından sonra ikinci bir kopya da yaz (farklı key, ekstra güvenlik)
+function writeSafetyBackup(){
+  try{
+    localStorage.setItem(BACKUP_KEY, JSON.stringify({
+      data: db,
+      savedAt: new Date().toISOString()
+    }));
+  }catch(e){
+    // Depolama dolu olabilir, sessizce geç
+  }
+}
+
+// Kaç satıştan sonra kullanıcıya "dosya olarak da indir" hatırlatması yapılsın
+const BACKUP_REMINDER_EVERY = 25;
+
+function checkBackupReminder(){
+  let count = parseInt(localStorage.getItem(BACKUP_SALE_COUNT_KEY)||'0') + 1;
+  localStorage.setItem(BACKUP_SALE_COUNT_KEY, count);
+
+  if (count >= BACKUP_REMINDER_EVERY) {
+    localStorage.setItem(BACKUP_SALE_COUNT_KEY, '0');
+    // Sadece internet yoksa hatırlat (internet varsa zaten Sheets'e gidiyor)
+    if (!navigator.onLine) {
+      showBackupReminder();
+    }
+  }
+}
+
+function showBackupReminder(){
+  const overlay = document.createElement('div');
+  overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.8);z-index:9999;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);';
+  overlay.innerHTML = `
+    <div style="background:var(--s1);border:1px solid var(--am);border-radius:14px;padding:24px;max-width:340px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.7);">
+      <div style="font-size:32px;margin-bottom:10px;">📴</div>
+      <div style="font-size:15px;font-weight:700;margin-bottom:8px;">Uzun süredir internetsizsin</div>
+      <div style="font-size:12px;color:var(--tx2);line-height:1.6;margin-bottom:16px;">
+        ${BACKUP_REMINDER_EVERY}+ satış yaptın ama henüz Sheets'e gönderilemedi.
+        Güvenlik için bir yedek dosyası indirmen önerilir.
+      </div>
+      <button onclick="exportData();this.closest('div[style*=fixed]').remove();" style="width:100%;padding:10px;background:var(--am);color:#000;border:none;border-radius:8px;font-weight:700;font-size:13px;cursor:pointer;margin-bottom:8px;">
+        💾 Şimdi Yedek İndir
+      </button>
+      <button onclick="this.closest('div[style*=fixed]').remove();" style="width:100%;padding:8px;background:none;color:var(--tx3);border:none;font-size:12px;cursor:pointer;">
+        Daha sonra hatırlat
+      </button>
+    </div>`;
+  document.body.appendChild(overlay);
+}
+
+// Veriyi geri yükleme yardımcı fonksiyonu (acil durum için)
+function restoreFromSafetyBackup(){
+  try{
+    const raw = localStorage.getItem(BACKUP_KEY);
+    if (!raw) { toast('Güvenlik yedeği bulunamadı','err'); return; }
+    const parsed = JSON.parse(raw);
+    if (confirm(`${parsed.savedAt} tarihli yedek geri yüklensin mi? Mevcut veri üzerine yazılacak.`)){
+      db = parsed.data;
+      save();
+      renderAll_safe();
+      toast('Yedekten geri yüklendi','ok');
+    }
+  }catch(e){
+    toast('Yedek okunamadı','err');
+  }
+}
+function renderAll_safe(){
+  try{ renderProds(); }catch(e){}
+  try{ renderVer(); }catch(e){}
+  try{ renderAlimList(); }catch(e){}
+  try{ renderAlimSummary(); }catch(e){}
+  try{ renderDash(); }catch(e){}
+}
+
 function importData(input){
   const f=input.files[0];if(!f) return;
   const r=new FileReader();
@@ -2563,33 +2721,45 @@ function copyAppsScript() {
 
 /* ═══════════════ INIT ═══════════════ */
 loadQueue();
-load();seed();checkLowStock();updateTedDatalist();
+load();
+seed();
+checkLowStock();
+updateTedDatalist();
 updateClock();setInterval(updateClock,15000);
 document.getElementById('today-count').textContent=db.sales.filter(s=>s.date.startsWith(todayISO())).length;
 setTimeout(()=>sinput.focus(),100);
+
+// Tüm sayfaları bir kez render et (sekmeye tıklamadan önce veri hazır olsun)
+renderProds();
+renderVer();
+renderAlimList();
+renderAlimSummary();
 
 // İlk açılış mantığı:
 // - Sheets sıfırlanacak (kullanıcı kararı), local veri esas
 // - İlk kez açılıyorsa local'i Sheets'e PUSH et
 // - Sonraki açılışlarda Sheets'ten kontrol et (çoklu cihaz)
 (async function initSync(){
-  const firstRun = !localStorage.getItem('bkl_synced_once');
-  if (firstRun && db.customers.length > 0) {
-    // Local veriyi Sheets'e gönder (Sheets'i bizim veriyle kur)
-    gsSyncAll();
-    localStorage.setItem('bkl_synced_once','1');
-    setTimeout(()=>{ renderVer(); }, 1000);
-  } else {
-    // Normal: Sheets'ten en güncel veriyi al
-    const ok = await gsLoadCustomers();
-    if (ok) renderVer();
-    localStorage.setItem('bkl_synced_once','1');
-  }
-  processQueue();
+  try {
+    const firstRun = !localStorage.getItem('bkl_synced_once');
+    if (firstRun && db.customers.length > 0) {
+      // Bu cihazda zaten müşteri verisi var → Sheets'i bizim veriyle kur
+      gsSyncAll();
+      localStorage.setItem('bkl_synced_once','1');
+      setTimeout(()=>{ renderVer(); }, 1000);
+    } else {
+      // Yeni cihaz veya normal açılış → Sheets'ten en güncel veriyi çek
+      const ok = await gsLoadCustomers();
+      if (ok) renderVer();
+      localStorage.setItem('bkl_synced_once','1');
+    }
+    processQueue();
 
-  // Sheets'teki Urunler sekmesinden GÜNCEL fiyatları otomatik çek
-  // (sessizce — toast göstermeden, sadece günceller)
-  setTimeout(()=>{ pullPricesFromSheets(true); }, 2000);
+    // Sheets'teki Urunler sekmesinden GÜNCEL fiyatları otomatik çek
+    setTimeout(()=>{ pullPricesFromSheets(true); }, 2000);
+  } catch(err) {
+    console.warn('Sync başlatma hatası (uygulama yine de çalışır):', err);
+  }
 })();
 
 // Her 2 dakikada bir Sheets'ten fiyat/stok kontrolü (sessiz)
