@@ -974,6 +974,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         <button class="xbtn s" style="width:auto;padding:6px 12px;margin-top:8px;font-size:11px;" onclick="restoreFromSafetyBackup()">♻️ Güvenlik Yedeğinden Geri Yükle</button>
       </div>
 
+      <div style="background:var(--rd-d);border:1px solid rgba(239,68,68,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
+        <div style="font-size:13px;font-weight:700;color:var(--rd);margin-bottom:6px;">🆘 Geçmişte Sheets'e gitmemiş satışlar var mı?</div>
+        <div>Eski bir sürüm kullanırken bazı satışların Sheets'e ulaşmadığını fark ettiysen, bu buton <strong style="color:var(--tx);">cihazdaki TÜM satış geçmişini</strong> tekrar Sheets'e gönderir.</div>
+        <div style="color:var(--am);margin-top:4px;">⚠️ Daha önce gitmiş satışlar Sheets'te 2 kere görünebilir (Fiş No ile ayırt edilir).</div>
+        <button id="resend-history-btn" class="xbtn s" style="width:auto;padding:6px 12px;margin-top:8px;font-size:11px;border-color:var(--rd);color:var(--rd);" onclick="resendAllSalesHistory()">📤 Tüm Satış Geçmişini Yeniden Gönder</button>
+        <div id="resend-status" style="font-size:11px;color:var(--tx3);margin-top:6px;font-family:var(--fm);"></div>
+      </div>
+
       <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--gr);"></div> Bağlı</div>
         <div style="display:flex;align-items:center;gap:5px;font-size:11px;"><div style="width:8px;height:8px;border-radius:50%;background:var(--am);"></div> Kaydediyor</div>
@@ -1241,8 +1249,11 @@ function gsSendSale(sale) {
     musteri: sale.customer||'',
     aciklama: sale.note||''
   });
-  // Satıştan sonra stok da değiştiği için ürün tablosunu da güncelle
-  setTimeout(gsSyncAll, 500);
+  // NOT: Stok güncellemesi artık her satışta TAM senkron (gsSyncAll) tetiklemiyor.
+  // Çünkü 197 ürünü her satışta yeniden yazmak 50-60 saniye sürüyordu ve
+  // kuyruğu tıkayıp diğer işlemleri geciktiriyordu. Stok/ürün senkronu artık
+  // sadece: (a) periyodik 2 dakikalık kontrolde, (b) manuel "Şimdi Yedekle"
+  // butonunda, (c) veresiye değişikliğinde tetikleniyor.
 }
 
 // VERESİYE + ÜRÜN ← Sheets'ten yükle (yeni {customers,products} formatı)
@@ -2655,6 +2666,59 @@ function forceSyncNow(){
   toast('Tüm veri Sheets\'e gönderiliyor...','info');
 }
 
+// KURTARMA: Tüm satış geçmişini Sheets'e YENİDEN gönder
+// Geçmişte kuyruk tıkanması yüzünden Sheets'e ulaşmamış satışlar
+// için kullanılır. Sheets'te aynı satış 2 kere yazılabilir
+// (Fiş No ile ayırt edebilirsin), ama veri kaybından iyidir.
+async function resendAllSalesHistory(){
+  if (!confirm(`${db.sales.length} satışın TAMAMI tekrar Sheets'e gönderilecek.\n\nBu işlem birkaç dakika sürebilir ve Sheets'te bazı satışlar 2 kere görünebilir (Fiş No'ya göre ayırt edilebilir).\n\nDevam edilsin mi?`)) return;
+
+  const btn = document.getElementById('resend-history-btn');
+  const statusEl = document.getElementById('resend-status');
+  if (btn) btn.disabled = true;
+
+  const api = getGsApi();
+  let success = 0, fail = 0;
+  const total = db.sales.length;
+
+  for (let i = 0; i < db.sales.length; i++) {
+    const sale = db.sales[i];
+    if (statusEl) statusEl.textContent = `Gönderiliyor: ${i+1}/${total} (✅${success} ❌${fail})`;
+
+    const payload = {
+      type: 'sale',
+      id: sale.id,
+      items: (sale.items||[]).map(it=>({name:it.name, price:it.unitPrice, qty:it.qty})),
+      toplam: sale.total,
+      tarih: new Date(sale.date).toLocaleDateString('tr-TR'),
+      saat: new Date(sale.date).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}),
+      odeme: sale.method==='ver'?'Veresiye':sale.method==='kart'?'Kart':'Nakit',
+      musteri: sale.customer||'',
+      aciklama: (sale.note||'') + ' [yeniden gönderildi]'
+    };
+
+    try {
+      const res = await fetch(api, {
+        method: 'POST',
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify(payload)
+      });
+      const text = await res.text();
+      let parsed = null;
+      try { parsed = JSON.parse(text); } catch(e) {}
+      if (isSuccessResponse(parsed)) success++; else fail++;
+    } catch(e) {
+      fail++;
+    }
+    // Sunucuyu boğmamak için küçük bekleme
+    await new Promise(r => setTimeout(r, 150));
+  }
+
+  if (btn) btn.disabled = false;
+  if (statusEl) statusEl.textContent = `Tamamlandı: ✅ ${success} gönderildi, ❌ ${fail} başarısız`;
+  toast(`Geçmiş gönderim bitti: ${success} başarılı, ${fail} hatalı`, fail>0?'err':'ok');
+}
+
 async function testGsConnection() {
   const url=document.getElementById('cfg-gs-url').value.trim();
   if(!url){toast('URL gir','err');return;}
@@ -2759,105 +2823,246 @@ function renderSyncLog() {
   }).join('');
 }
 
-const APPS_SCRIPT_CODE = `// BAKKAL POS — Google Apps Script (FİNAL)
-// Mevcut kodu SİL, bunu yapıştır, Dağıt > Dağıtımları yönet > Yeni sürüm
+const APPS_SCRIPT_CODE = `/**
+ * ═══════════════════════════════════════════════════════════
+ *  BAKKAL POS — Google Apps Script (HIZLI SÜRÜM)
+ * ═══════════════════════════════════════════════════════════
+ *
+ *  Bu sürüm, önceki sürümdeki YAVAŞLIK sorununu çözer.
+ *  Önceki sürüm appendRow() ve sheet.clear() döngü içinde
+ *  tek tek çağrıldığı için 50-60 saniye sürüyordu.
+ *  Bu sürüm TOPLU YAZMA (batch write) kullanır → 1-2 saniye.
+ *
+ *  KURULUM (tek seferlik):
+ *  1. Google Sheets'i aç → Uzantılar → Apps Script
+ *  2. Mevcut tüm kodu SİL (Ctrl+A, Delete)
+ *  3. Bu kodu yapıştır
+ *  4. 💾 Kaydet (Ctrl+S)
+ *  5. Sağ üstte "Dağıt" → "Dağıtımları yönet"
+ *     → kalem (düzenle) → Sürüm: "Yeni sürüm" → "Dağıt"
+ *  6. URL aynı kalır, POS'ta değişiklik gerekmez
+ *
+ *  OLUŞTURDUĞU SEKMELER (otomatik):
+ *  • Satislar  → her satış bir satır (ürün | fiyat | tarih | ödeme)
+ *  • Veresiye  → okunabilir müşteri tablosu (isim | tel | bakiye)
+ *  • Urunler   → stok takibi (barkod | ad | fiyat | stok)
+ *  • _data     → uygulamanın okuduğu teknik veri (gizli, dokunma)
+ * ═══════════════════════════════════════════════════════════
+ */
 
 const SPREADSHEET_ID = '1-vFQHt0mL2KWLiMBjN2HoeFWuJqXN6wJVw6UqdV0DkE';
 
-function doGet(e){
-  try{
-    const ss=SpreadsheetApp.openById(SPREADSHEET_ID);
-    const action=(e&&e.parameter&&e.parameter.action)||'';
-    if(action==='products'){return json(JSON.stringify(readProducts(ss)));}
-    const sheet=getSheet(ss,'_data');
-    const raw=sheet.getRange(1,1).getValue();
-    return json(raw&&raw.toString().trim()?raw.toString():'{"customers":[],"products":[]}');
-  }catch(err){return json(JSON.stringify({error:err.message}));}
-}
+// ──────────────────────────────────────────────
+//  GET → Uygulama açılınca veresiye + ürün verisini çeker
+//  ?action=products → sadece Urunler sekmesindeki güncel fiyatları döndür
+// ──────────────────────────────────────────────
+function doGet(e) {
+  try {
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const action = (e && e.parameter && e.parameter.action) || '';
 
-function readProducts(ss){
-  const sheet=ss.getSheetByName('Urunler');
-  if(!sheet||sheet.getLastRow()<2)return [];
-  const rows=sheet.getDataRange().getValues();const out=[];
-  for(let i=1;i<rows.length;i++){
-    const r=rows[i];const bc=String(r[0]||'').trim();if(!bc)continue;
-    out.push({barcode:bc,name:String(r[1]||'').trim(),cat:String(r[2]||'diger').trim(),price:parseFloat(r[3])||0,cost:parseFloat(r[4])||0,stock:(r[5]!==''&&r[5]!==null)?parseInt(r[5]):undefined,minStock:parseInt(r[6])||undefined});
-  }
-  return out;
-}
-
-function doPost(e){
-  try{
-    const body=JSON.parse(e.postData.contents);
-    const ss=SpreadsheetApp.openById(SPREADSHEET_ID);
-    if(body.type==='sale'){logSale(ss,body);return json('{"ok":true}');}
-    if(body.type==='sync'){
-      saveData(ss,body.customers||[],body.products||[]);
-      writeCustomerTable(ss,body.customers||[]);
-      writeProductTable(ss,body.products||[]);
-      return json('{"ok":true}');
+    if (action === 'products') {
+      return json(JSON.stringify(readProductTable(ss)));
     }
-    if(Array.isArray(body)){saveData(ss,body,null);writeCustomerTable(ss,body);return json('{"ok":true}');}
-    return json('{"error":"unknown"}');
-  }catch(err){return json(JSON.stringify({error:err.message}));}
-}
 
-function logSale(ss,sale){
-  const sheet=getSheet(ss,'Satislar');
-  if(sheet.getLastRow()===0){
-    sheet.appendRow(['Ürün','Fiyat (₺)','Adet','Tutar (₺)','Tarih','Saat','Ödeme','Müşteri','Fiş No']);
-    sheet.getRange(1,1,1,9).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
-    sheet.setFrozenRows(1);sheet.setColumnWidth(1,200);
-  }
-  const items=sale.items||[];
-  if(items.length===0){
-    sheet.appendRow([sale.aciklama||'İşlem','','',sale.toplam||0,sale.tarih||'',sale.saat||'',sale.odeme||'',sale.musteri||'',sale.id||'']);
-  }else{
-    items.forEach(it=>sheet.appendRow([it.name||'',it.price||0,it.qty||1,(it.price||0)*(it.qty||1),sale.tarih||'',sale.saat||'',sale.odeme||'',sale.musteri||'',sale.id||'']));
+    const sheet = getSheet(ss, '_data');
+    const raw = sheet.getRange(1, 1).getValue();
+    const payload = raw && raw.toString().trim() ? raw.toString() : '{"customers":[],"products":[]}';
+    return json(payload);
+  } catch (err) {
+    return json(JSON.stringify({ ok: false, error: err.message }));
   }
 }
 
-function writeCustomerTable(ss,customers){
-  const sheet=getSheet(ss,'Veresiye');sheet.clear();
-  sheet.appendRow(['Müşteri','Telefon','Bakiye (₺)','Limit (₺)','İşlem','Son İşlem']);
-  sheet.getRange(1,1,1,6).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
-  sheet.setFrozenRows(1);sheet.setColumnWidth(1,180);
-  const sorted=customers.slice().sort((a,b)=>(b.balance||0)-(a.balance||0));
-  sorted.forEach(c=>{
-    const txs=c.transactions||c.txs||[];const last=txs.length?txs[txs.length-1]:null;
-    const ld=last?(last.ts?new Date(last.ts).toLocaleString('tr-TR'):(last.date||'')):'';
-    sheet.appendRow([c.name||'',c.phone||'',c.balance||0,c.limit||0,txs.length,ld]);
-  });
-  if(sorted.length)sheet.getRange(2,3,sorted.length,1).setFontColor('#d97706').setFontWeight('bold');
+// Urunler sekmesini OKU → güncel fiyat/stok bilgisi
+function readProductTable(ss) {
+  const sheet = ss.getSheetByName('Urunler');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const rows = sheet.getDataRange().getValues();
+  const products = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const barcode = String(r[0] || '').trim();
+    if (!barcode) continue;
+    products.push({
+      barcode: barcode,
+      name: String(r[1] || '').trim(),
+      cat: String(r[2] || 'diger').trim(),
+      price: parseFloat(r[3]) || 0,
+      cost: parseFloat(r[4]) || 0,
+      stock: (r[5] !== '' && r[5] !== null) ? parseInt(r[5]) : undefined,
+      minStock: parseInt(r[6]) || undefined
+    });
+  }
+  return products;
 }
 
-function writeProductTable(ss,products){
-  const sheet=getSheet(ss,'Urunler');sheet.clear();
-  sheet.appendRow(['Barkod','Ürün Adı','Kategori','Satış (₺)','Alış (₺)','Stok','Min','Durum']);
-  sheet.getRange(1,1,1,8).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
-  sheet.setFrozenRows(1);sheet.setColumnWidth(2,200);
-  products.forEach(p=>{
-    let d='';
-    if(p.stock!==undefined&&p.stock!==''&&p.stock!==null){
-      if(+p.stock<=0)d='❌ Tükendi';else if(p.minStock&&+p.stock<=+p.minStock)d='⚠️ Az';else d='✅ Yeterli';
+// ──────────────────────────────────────────────
+//  POST → Satış kaydı, veresiye güncelleme, ürün senkronizasyonu
+//  HIZLI: tek satır eklemeler appendRow yerine batch yapılır
+// ──────────────────────────────────────────────
+function doPost(e) {
+  try {
+    const body = JSON.parse(e.postData.contents);
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+
+    // ── 1. SATIŞ kaydı (HIZLI — sadece 1 satır ekler, ms sürer) ──
+    if (body.type === 'sale') {
+      logSaleFast(ss, body);
+      return json('{"ok":true,"type":"sale"}');
     }
-    sheet.appendRow([p.barcode||'',p.name||'',p.cat||'',p.price||0,p.cost||0,(p.stock!==undefined&&p.stock!=='')?p.stock:'',p.minStock||'',d]);
+
+    // ── 2. VERESİYE + ÜRÜN tam senkronizasyon (TOPLU YAZMA) ──
+    if (body.type === 'sync') {
+      saveData(ss, body.customers || [], body.products || []);
+      writeCustomerTableFast(ss, body.customers || []);
+      if (body.products && body.products.length) {
+        writeProductTableFast(ss, body.products);
+      }
+      return json('{"ok":true,"type":"sync"}');
+    }
+
+    // ── 3. Eski format (sadece müşteri array) — geriye uyumluluk ──
+    if (Array.isArray(body)) {
+      saveData(ss, body, null);
+      writeCustomerTableFast(ss, body);
+      return json('{"ok":true,"type":"legacy"}');
+    }
+
+    return json('{"ok":false,"error":"bilinmeyen istek tipi"}');
+  } catch (err) {
+    return json(JSON.stringify({ ok: false, error: err.message }));
+  }
+}
+
+// ──────────────────────────────────────────────
+//  SATIŞ → "Satislar" sekmesine satır ekle (HIZLI)
+// ──────────────────────────────────────────────
+function logSaleFast(ss, sale) {
+  const sheet = getSheet(ss, 'Satislar');
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['Ürün', 'Fiyat (₺)', 'Adet', 'Tutar (₺)', 'Tarih', 'Saat', 'Ödeme', 'Müşteri', 'Fiş No']);
+    const h = sheet.getRange(1, 1, 1, 9);
+    h.setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 200);
+  }
+
+  const tarih = sale.tarih || '';
+  const saat = sale.saat || '';
+  const odeme = sale.odeme || '';
+  const musteri = sale.musteri || '';
+  const fisNo = sale.id || '';
+  const items = sale.items || [];
+
+  if (items.length === 0) {
+    sheet.appendRow([sale.aciklama || 'İşlem', '', '', sale.toplam || 0, tarih, saat, odeme, musteri, fisNo]);
+  } else if (items.length === 1) {
+    const it = items[0];
+    sheet.appendRow([it.name||'', it.price||0, it.qty||1, (it.price||0)*(it.qty||1), tarih, saat, odeme, musteri, fisNo]);
+  } else {
+    const rows = items.map(it => [
+      it.name||'', it.price||0, it.qty||1, (it.price||0)*(it.qty||1),
+      tarih, saat, odeme, musteri, fisNo
+    ]);
+    const startRow = sheet.getLastRow() + 1;
+    sheet.getRange(startRow, 1, rows.length, 9).setValues(rows);
+  }
+}
+
+// ──────────────────────────────────────────────
+//  VERESİYE → okunabilir müşteri tablosu (TOPLU YAZMA — hızlı)
+// ──────────────────────────────────────────────
+function writeCustomerTableFast(ss, customers) {
+  const sheet = getSheet(ss, 'Veresiye');
+  sheet.clear();
+
+  const header = ['Müşteri', 'Telefon', 'Bakiye (₺)', 'Limit (₺)', 'İşlem Sayısı', 'Son İşlem'];
+  const sorted = customers.slice().sort((a, b) => (b.balance || 0) - (a.balance || 0));
+
+  const rows = sorted.map(c => {
+    const txs = c.transactions || c.txs || [];
+    const last = txs.length ? txs[txs.length - 1] : null;
+    const lastDate = last ? (last.ts ? new Date(last.ts).toLocaleString('tr-TR') : (last.date || '')) : '';
+    return [c.name || '', c.phone || '', c.balance || 0, c.limit || 0, txs.length, lastDate];
   });
+
+  const allData = [header, ...rows];
+  sheet.getRange(1, 1, allData.length, 6).setValues(allData);
+
+  sheet.getRange(1, 1, 1, 6).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidth(1, 180);
+  if (rows.length > 0) {
+    sheet.getRange(2, 3, rows.length, 1).setFontColor('#d97706').setFontWeight('bold');
+  }
 }
 
-function saveData(ss,customers,products){
-  const sheet=getSheet(ss,'_data');
-  let ex={customers:[],products:[]};
-  try{const raw=sheet.getRange(1,1).getValue();if(raw)ex=JSON.parse(raw.toString());}catch(e){}
-  sheet.getRange(1,1).setValue(JSON.stringify({
-    customers:customers!==null?customers:ex.customers,
-    products:products!==null?products:ex.products,
-    updated:new Date().toISOString()
-  }));
+// ──────────────────────────────────────────────
+//  ÜRÜNLER → stok takibi tablosu (TOPLU YAZMA — hızlı)
+// ──────────────────────────────────────────────
+function writeProductTableFast(ss, products) {
+  const sheet = getSheet(ss, 'Urunler');
+  sheet.clear();
+
+  const header = ['Barkod', 'Ürün Adı', 'Kategori', 'Satış (₺)', 'Alış (₺)', 'Stok', 'Min', 'Durum'];
+
+  const rows = products.map(p => {
+    let durum = '';
+    if (p.stock !== undefined && p.stock !== '' && p.stock !== null) {
+      if (+p.stock <= 0) durum = '❌ Tükendi';
+      else if (p.minStock && +p.stock <= +p.minStock) durum = '⚠️ Az kaldı';
+      else durum = '✅ Yeterli';
+    }
+    return [
+      p.barcode || '', p.name || '', p.cat || '',
+      p.price || 0, p.cost || 0,
+      (p.stock !== undefined && p.stock !== '') ? p.stock : '',
+      p.minStock || '', durum
+    ];
+  });
+
+  const allData = [header, ...rows];
+  sheet.getRange(1, 1, allData.length, 8).setValues(allData);
+
+  sheet.getRange(1, 1, 1, 8).setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
+  sheet.setFrozenRows(1);
+  sheet.setColumnWidth(2, 200);
 }
 
-function getSheet(ss,name){let s=ss.getSheetByName(name);if(!s)s=ss.insertSheet(name);return s;}
-function json(t){return ContentService.createTextOutput(t).setMimeType(ContentService.MimeType.JSON);}`;
+// ──────────────────────────────────────────────
+//  Teknik veri (_data) — uygulamanın okuduğu JSON
+// ──────────────────────────────────────────────
+function saveData(ss, customers, products) {
+  const sheet = getSheet(ss, '_data');
+  let existing = { customers: [], products: [] };
+  try {
+    const raw = sheet.getRange(1, 1).getValue();
+    if (raw) existing = JSON.parse(raw.toString());
+  } catch (e) {}
+
+  const payload = {
+    customers: customers !== null ? customers : existing.customers,
+    products: products !== null ? products : existing.products,
+    updated: new Date().toISOString()
+  };
+  sheet.getRange(1, 1).setValue(JSON.stringify(payload));
+}
+
+// ──────────────────────────────────────────────
+//  YARDIMCI
+// ──────────────────────────────────────────────
+function getSheet(ss, name) {
+  let sheet = ss.getSheetByName(name);
+  if (!sheet) sheet = ss.insertSheet(name);
+  return sheet;
+}
+
+function json(text) {
+  return ContentService.createTextOutput(text).setMimeType(ContentService.MimeType.JSON);
+}
+`;
 
 function copyAppsScript() {
   navigator.clipboard.writeText(APPS_SCRIPT_CODE).then(()=>{
