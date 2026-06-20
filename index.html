@@ -988,9 +988,14 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         <div style="font-size:10px;color:var(--tx3);margin-top:4px;">script.google.com'dan aldığın Web Uygulaması URL'si</div>
       </div>
       <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">
-        <button class="xbtn s" style="width:auto;padding:7px 12px;margin:0;font-size:11px;" onclick="testGsConnection()">🔌 Bağlantıyı Test Et</button>
+        <button class="xbtn p" style="width:auto;padding:8px 14px;margin:0;font-size:12px;" onclick="realConnectionTest()">🧪 GERÇEK Test (satır yazdır)</button>
         <button class="xbtn s" style="width:auto;padding:7px 12px;margin:0;font-size:11px;" onclick="forceSyncNow()">🔄 Şimdi Yedekle</button>
-        <div id="gs-test-result" style="font-size:11px;color:var(--tx2);padding:7px 0;font-family:var(--fm);"></div>
+      </div>
+      <div id="gs-test-result" style="font-size:12px;color:var(--tx2);padding:8px 0;font-family:var(--fm);line-height:1.6;"></div>
+
+      <div style="margin-top:10px;">
+        <button class="xbtn s" style="width:auto;padding:6px 12px;margin:0;font-size:11px;" onclick="toggleSyncLog()">📋 Senkron Günlüğünü Göster</button>
+        <div id="sync-log-panel" style="display:none;margin-top:8px;background:var(--s2);border-radius:var(--r2);padding:10px;max-height:200px;overflow-y:auto;font-family:var(--fm);font-size:10px;"></div>
       </div>
 
       <div style="margin-top:16px;background:var(--s2);border-radius:var(--r2);padding:14px;font-size:11px;color:var(--tx2);line-height:1.8;">
@@ -1089,6 +1094,27 @@ function loadQueue(){ try{gsQueue=JSON.parse(localStorage.getItem('bkl_q')||'[]'
 function saveQueue(){ localStorage.setItem('bkl_q', JSON.stringify(gsQueue)); }
 function queueCount(){ return gsQueue.length; }
 
+// ── SENKRON GÜNLÜĞÜ ──
+// Her gönderim denemesini kaydeder (başarılı/başarısız), Ayarlar'da görülebilir
+const SYNC_LOG_KEY = 'bkl_sync_log';
+function logSyncEvent(status, item, detail) {
+  try {
+    let log = JSON.parse(localStorage.getItem(SYNC_LOG_KEY) || '[]');
+    log.unshift({
+      time: new Date().toISOString(),
+      status, // 'ok' | 'server_error' | 'unexpected' | 'network_error'
+      type: item.type || 'unknown',
+      detail: String(detail||'').slice(0,200)
+    });
+    log = log.slice(0, 20); // son 20 olay yeter
+    localStorage.setItem(SYNC_LOG_KEY, JSON.stringify(log));
+  } catch(e) {}
+}
+function getSyncLog() {
+  try { return JSON.parse(localStorage.getItem(SYNC_LOG_KEY) || '[]'); }
+  catch(e) { return []; }
+}
+
 function setSyncUI(state, msg) {
   const dot = document.getElementById('gs-dot');
   const txt = document.getElementById('gs-txt');
@@ -1108,27 +1134,50 @@ async function processQueue() {
   setSyncUI('syncing', 'Kaydediliyor');
   const api = getGsApi();
   let failCount = 0;
+  let lastError = null;
+
   while (gsQueue.length > 0 && failCount < 3) {
     const item = gsQueue[0];
     try {
-      // no-cors: Apps Script CORS header döndürmez, response okunamaz
-      // ama POST gerçekleşir. Hata FIRLATIRSA offline demektir.
-      await fetch(api, {
+      // GERÇEK cevabı oku — Apps Script'in işi yapıp yapmadığını DOĞRULA
+      const res = await fetch(api, {
         method: 'POST',
-        mode: 'no-cors',
         headers: {'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify(item)
       });
-      gsQueue.shift();
-      saveQueue();
+      const text = await res.text();
+      let parsed = null;
+      try { parsed = JSON.parse(text); } catch(e) {}
+
+      if (parsed && parsed.ok) {
+        // Gerçekten başarılı — sunucu onayladı
+        gsQueue.shift();
+        saveQueue();
+        logSyncEvent('ok', item, text);
+      } else if (parsed && parsed.error) {
+        // Sunucu hata döndürdü (örn. kod hatası, izin sorunu)
+        lastError = parsed.error;
+        logSyncEvent('server_error', item, text);
+        failCount++;
+        break;
+      } else {
+        // Beklenmedik cevap — HTML hata sayfası dönmüş olabilir (deploy sorunu)
+        lastError = 'Beklenmeyen cevap: ' + text.slice(0,100);
+        logSyncEvent('unexpected', item, text);
+        failCount++;
+        break;
+      }
     } catch(e) {
+      lastError = e.message;
       failCount++;
+      logSyncEvent('network_error', item, e.message);
       break; // bağlantı koptu, sonra tekrar dene
     }
   }
   gsSyncing = false;
   if (gsQueue.length > 0) {
-    setSyncUI('queue', 'Bekliyor');
+    setSyncUI('queue', lastError ? 'Hata: '+String(lastError).slice(0,30) : 'Bekliyor');
+    if (lastError) console.error('Sync hatası:', lastError);
   } else {
     setSyncUI('ok', 'Yedeklendi ✓');
     setTimeout(() => setSyncUI('ok', 'Bağlı'), 2500);
@@ -2608,6 +2657,91 @@ async function testGsConnection() {
   }catch(e){
     el.textContent='❌ Bağlantı kurulamadı';el.style.color='var(--rd)';
   }
+}
+
+// GERÇEK TEST: Sheets'e sahte bir test satırı yazıp CEVABI DOĞRULA
+// Bu, no-cors'un gizlediği gerçek hataları ortaya çıkarır
+async function realConnectionTest() {
+  const url = getGsApi();
+  const el = document.getElementById('gs-test-result');
+  el.style.color = 'var(--am)';
+  el.innerHTML = '🧪 Test satırı gönderiliyor, lütfen bekle...';
+
+  const testPayload = {
+    type: 'sale',
+    id: 'TEST-' + Date.now(),
+    items: [{ name: '🧪 BAĞLANTI TESTİ (silebilirsin)', price: 0, qty: 1 }],
+    toplam: 0,
+    tarih: new Date().toLocaleDateString('tr-TR'),
+    saat: new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}),
+    odeme: 'Test',
+    musteri: '',
+    aciklama: 'Bağlantı testi'
+  };
+
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type':'text/plain;charset=utf-8'},
+      body: JSON.stringify(testPayload)
+    });
+    const text = await res.text();
+    let parsed = null;
+    try { parsed = JSON.parse(text); } catch(e) {}
+
+    if (parsed && parsed.ok) {
+      el.style.color = 'var(--gr)';
+      el.innerHTML = `✅ BAŞARILI! Sheets'e gerçekten yazıldı.<br>
+        <span style="color:var(--tx3);">Google Sheets → "Satislar" sekmesini aç, en altta "🧪 BAĞLANTI TESTİ" satırını görmelisin. Silebilirsin.</span>`;
+      logSyncEvent('ok', testPayload, 'Manuel test başarılı');
+    } else if (parsed && parsed.error) {
+      el.style.color = 'var(--rd)';
+      el.innerHTML = `❌ SUNUCU HATASI:<br><span style="color:var(--rd);">${esc(parsed.error)}</span><br>
+        <span style="color:var(--tx3);">Apps Script kodunda hata var. Deploy'u kontrol et.</span>`;
+      logSyncEvent('server_error', testPayload, parsed.error);
+    } else {
+      el.style.color = 'var(--rd)';
+      el.innerHTML = `⚠️ BEKLENMEYEN CEVAP:<br><span style="color:var(--tx3);font-size:10px;">${esc(text.slice(0,200))}</span><br>
+        <span style="color:var(--rd);">Bu genelde "Dağıtım" ayarlarının yanlış olduğu anlamına gelir (Erişim: Herkes seçili mi?)</span>`;
+      logSyncEvent('unexpected', testPayload, text);
+    }
+  } catch(e) {
+    el.style.color = 'var(--rd)';
+    el.innerHTML = `❌ BAĞLANTI KURULAMADI:<br><span style="color:var(--tx3);">${esc(e.message)}</span><br>
+      <span style="color:var(--rd);">İnternet yok ya da URL yanlış.</span>`;
+    logSyncEvent('network_error', testPayload, e.message);
+  }
+}
+
+function toggleSyncLog() {
+  const panel = document.getElementById('sync-log-panel');
+  const isHidden = panel.style.display === 'none';
+  panel.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) renderSyncLog();
+}
+
+function renderSyncLog() {
+  const panel = document.getElementById('sync-log-panel');
+  const log = getSyncLog();
+  if (!log.length) {
+    panel.innerHTML = '<div style="color:var(--tx3);">Henüz kayıt yok</div>';
+    return;
+  }
+  const statusInfo = {
+    ok: {icon:'✅', color:'var(--gr)', label:'Başarılı'},
+    server_error: {icon:'❌', color:'var(--rd)', label:'Sunucu Hatası'},
+    unexpected: {icon:'⚠️', color:'var(--am)', label:'Beklenmedik'},
+    network_error: {icon:'📡', color:'var(--rd)', label:'Bağlantı Yok'}
+  };
+  panel.innerHTML = log.map(e => {
+    const s = statusInfo[e.status] || {icon:'?', color:'var(--tx3)', label:e.status};
+    const time = new Date(e.time).toLocaleString('tr-TR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    return `<div style="padding:5px 0;border-bottom:1px solid var(--b);">
+      <span style="color:${s.color};">${s.icon} ${s.label}</span>
+      <span style="color:var(--tx3);"> · ${time} · ${esc(e.type)}</span>
+      ${e.detail && e.status!=='ok' ? `<div style="color:var(--tx3);margin-top:2px;">${esc(e.detail)}</div>` : ''}
+    </div>`;
+  }).join('');
 }
 
 const APPS_SCRIPT_CODE = `// BAKKAL POS — Google Apps Script (FİNAL)
