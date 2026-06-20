@@ -3,7 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bakkal POS v3</title>
+<title>Bakkal POS</title>
+<link rel="manifest" href="./manifest.json">
+<meta name="theme-color" content="#0f0f11">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Bakkal">
+<link rel="apple-touch-icon" href="./icon-192.png">
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -451,6 +458,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
   <button class="nb" id="nb-alim" onclick="go('alim')"><span class="i">📦</span>Alım</button>
   <button class="nb" id="nb-dash" onclick="go('dash')"><span class="i">📊</span>Dashboard</button>
   <div class="tb-r">
+    <button id="install-app-btn" onclick="installApp()" style="display:none;align-items:center;gap:5px;background:var(--am-d);border:1px solid var(--am);border-radius:5px;padding:5px 10px;font-size:11px;font-family:var(--ff);color:var(--am);cursor:pointer;font-weight:600;">
+      📲 Uygulamayı Yükle
+    </button>
     <span class="kbd-hint" id="stock-alert" style="display:none;color:var(--rd);border-color:var(--rd);">⚠️ Düşük stok</span>
     <div id="gs-bar" style="display:flex;align-items:center;gap:5px;background:var(--s2);border:1px solid var(--b);border-radius:5px;padding:4px 9px;font-size:10px;font-family:var(--fm);color:var(--tx2);cursor:pointer;" onclick="openSettings()">
       <div id="gs-dot" style="width:6px;height:6px;border-radius:50%;background:var(--tx3);flex-shrink:0;transition:background .3s;"></div>
@@ -2588,6 +2598,53 @@ setInterval(()=>{
     pullPricesFromSheets(true);
   }
 }, 120000);
+
+/* ═══════════════ PWA: OFFLINE ÇALIŞMA ═══════════════ */
+// Service Worker kaydı — uygulamayı internet olmadan açılabilir yapar
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./service-worker.js')
+      .then(reg => {
+        console.log('Bakkal POS: offline mod hazır ✓');
+        // Yeni versiyon varsa otomatik güncelle
+        reg.addEventListener('updatefound', () => {
+          const newWorker = reg.installing;
+          newWorker.addEventListener('statechange', () => {
+            if (newWorker.state === 'activated') {
+              toast('Uygulama güncellendi, yenile (F5)', 'info');
+            }
+          });
+        });
+      })
+      .catch(err => console.warn('Service worker kayıt hatası:', err));
+  });
+}
+
+// "Ana ekrana ekle" önerisini yakala ve özel buton göster
+let deferredInstallPrompt = null;
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredInstallPrompt = e;
+  const btn = document.getElementById('install-app-btn');
+  if (btn) btn.style.display = 'flex';
+});
+
+function installApp() {
+  if (!deferredInstallPrompt) {
+    toast('Tarayıcı menüsünden "Ana ekrana ekle" seçebilirsin', 'info');
+    return;
+  }
+  deferredInstallPrompt.prompt();
+  deferredInstallPrompt.userChoice.then(choice => {
+    if (choice.outcome === 'accepted') {
+      toast('Uygulama yüklendi! Artık ana ekrandan açabilirsin', 'ok');
+    }
+    deferredInstallPrompt = null;
+    const btn = document.getElementById('install-app-btn');
+    if (btn) btn.style.display = 'none';
+  });
+}
+
 </script>
 </body>
 </html>
