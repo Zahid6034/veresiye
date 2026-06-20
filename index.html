@@ -1149,14 +1149,14 @@ async function processQueue() {
       let parsed = null;
       try { parsed = JSON.parse(text); } catch(e) {}
 
-      if (parsed && parsed.ok) {
+      if (isSuccessResponse(parsed)) {
         // Gerçekten başarılı — sunucu onayladı
         gsQueue.shift();
         saveQueue();
         logSyncEvent('ok', item, text);
-      } else if (parsed && parsed.error) {
+      } else if (getErrorFromResponse(parsed)) {
         // Sunucu hata döndürdü (örn. kod hatası, izin sorunu)
-        lastError = parsed.error;
+        lastError = getErrorFromResponse(parsed);
         logSyncEvent('server_error', item, text);
         failCount++;
         break;
@@ -1182,6 +1182,20 @@ async function processQueue() {
     setSyncUI('ok', 'Yedeklendi ✓');
     setTimeout(() => setSyncUI('ok', 'Bağlı'), 2500);
   }
+}
+
+// Apps Script farklı versiyonlarda farklı başarı formatı döndürebilir
+// ({"ok":true} ya da {"status":"ok"} gibi) — ikisini de kabul et
+function isSuccessResponse(parsed) {
+  if (!parsed || typeof parsed !== 'object') return false;
+  if (parsed.ok === true) return true;
+  if (parsed.status === 'ok' || parsed.status === 'success') return true;
+  if (parsed.success === true) return true;
+  return false;
+}
+function getErrorFromResponse(parsed) {
+  if (!parsed) return null;
+  return parsed.error || parsed.message || null;
 }
 
 function queueAndSync(payload) {
@@ -2689,20 +2703,21 @@ async function realConnectionTest() {
     let parsed = null;
     try { parsed = JSON.parse(text); } catch(e) {}
 
-    if (parsed && parsed.ok) {
+    if (isSuccessResponse(parsed)) {
       el.style.color = 'var(--gr)';
       el.innerHTML = `✅ BAŞARILI! Sheets'e gerçekten yazıldı.<br>
         <span style="color:var(--tx3);">Google Sheets → "Satislar" sekmesini aç, en altta "🧪 BAĞLANTI TESTİ" satırını görmelisin. Silebilirsin.</span>`;
-      logSyncEvent('ok', testPayload, 'Manuel test başarılı');
-    } else if (parsed && parsed.error) {
+      logSyncEvent('ok', testPayload, 'Manuel test başarılı: '+text);
+    } else if (getErrorFromResponse(parsed)) {
       el.style.color = 'var(--rd)';
-      el.innerHTML = `❌ SUNUCU HATASI:<br><span style="color:var(--rd);">${esc(parsed.error)}</span><br>
+      el.innerHTML = `❌ SUNUCU HATASI:<br><span style="color:var(--rd);">${esc(getErrorFromResponse(parsed))}</span><br>
         <span style="color:var(--tx3);">Apps Script kodunda hata var. Deploy'u kontrol et.</span>`;
-      logSyncEvent('server_error', testPayload, parsed.error);
+      logSyncEvent('server_error', testPayload, getErrorFromResponse(parsed));
     } else {
       el.style.color = 'var(--rd)';
       el.innerHTML = `⚠️ BEKLENMEYEN CEVAP:<br><span style="color:var(--tx3);font-size:10px;">${esc(text.slice(0,200))}</span><br>
-        <span style="color:var(--rd);">Bu genelde "Dağıtım" ayarlarının yanlış olduğu anlamına gelir (Erişim: Herkes seçili mi?)</span>`;
+        <span style="color:var(--tx2);">Not: Eğer cevap içinde "ok" geçiyorsa muhtemelen veri YAZILMIŞTIR ama format tanınmadı. Sheets'i kontrol et.</span><br>
+        <span style="color:var(--rd);">Format tanınmıyorsa bu genelde "Dağıtım" ayarlarının yanlış olduğu anlamına gelir (Erişim: Herkes seçili mi?)</span>`;
       logSyncEvent('unexpected', testPayload, text);
     }
   } catch(e) {
