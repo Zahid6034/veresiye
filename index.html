@@ -2201,10 +2201,50 @@ function updateClock(){document.getElementById('clk').textContent=new Date().toL
 
 /* ═══════════════ ÜRÜN KATALOĞU ═══════════════ */
 function seed(){
-  // Versiyon kontrolü — v5 kataloğu yüklüyse tekrar yükleme
-  if(db.productVersion === 5 && db.products.length >= 100) return;
-  db.productVersion = 5;
-  db.products=[
+  // Versiyon kontrolü:
+  // v5 → ilk büyük katalog (195 ürün)
+  // v6 → genişletilmiş katalog (Avşar, Filiz, Eti serisi, cipsler vs eklendi)
+  // Mantık: ilk kurulumda TÜM kataloğu yükle. Zaten ürünü olan kullanıcıda
+  // ise sadece YENİ ürünleri ekle (mevcut fiyat/stok değişikliklerini KORU).
+
+  const isFirstInstall = !db.products || db.products.length === 0;
+  const needsV6Update = db.productVersion < 6 && !isFirstInstall;
+
+  const FULL_CATALOG = getFullCatalog();
+
+  if (isFirstInstall) {
+    // Sıfırdan kurulum → tüm katalog
+    db.products = FULL_CATALOG;
+    db.productVersion = 6;
+    save();
+    return;
+  }
+
+  if (needsV6Update) {
+    // Mevcut kullanıcı → sadece eksik (yeni) ürünleri ekle
+    const existingBarcodes = new Set(db.products.map(p => p.barcode));
+    let added = 0;
+    FULL_CATALOG.forEach(p => {
+      if (!existingBarcodes.has(p.barcode)) {
+        db.products.push(p);
+        added++;
+      }
+    });
+    db.productVersion = 6;
+    save();
+    if (added > 0) {
+      setTimeout(() => {
+        try { toast(`${added} yeni ürün kataloğa eklendi`, 'ok'); } catch(e){}
+      }, 1500);
+    }
+    return;
+  }
+
+  // Zaten güncel (v6+) → bir şey yapma
+}
+
+function getFullCatalog(){
+  return [
   /* ── SİGARA / TÜTÜN ── */
   {barcode:'8690804530015',name:'Marlboro Kırmızı',price:84,cost:70,cat:'sigara',unit:'paket',kdv:'20',stock:50,minStock:10},
   {barcode:'8690804530022',name:'Marlboro Gold',price:84,cost:70,cat:'sigara',unit:'paket',kdv:'20',stock:40,minStock:10},
@@ -2443,6 +2483,270 @@ function seed(){
   {barcode:'8690900070015',name:'Bebek Bezi Molfix Mini 1 Adet',price:5,cost:3,cat:'diger',unit:'adet',kdv:'1',stock:20,minStock:8},
   {barcode:'8690900080014',name:'Silgi',price:5,cost:3,cat:'diger',unit:'adet',kdv:'18',stock:10,minStock:4},
   {barcode:'8690900080021',name:'Tükenmez Kalem',price:8,cost:5,cat:'diger',unit:'adet',kdv:'18',stock:10,minStock:4},
+
+  /* ═══════════ GENİŞLETİLMİŞ KATALOG (v6) ═══════════ */
+
+  /* ── SODALAR / MADEN SUYU ── */
+  {barcode:'8690506466013',name:'Uludağ Soda Sade 200ml',price:8,cost:5,cat:'icecek',unit:'şişe',kdv:'10',stock:48,minStock:12},
+  {barcode:'8690506466020',name:'Uludağ Soda Limon 200ml',price:9,cost:6,cat:'icecek',unit:'şişe',kdv:'10',stock:48,minStock:12},
+  {barcode:'8690506466037',name:'Uludağ Soda Elma 200ml',price:9,cost:6,cat:'icecek',unit:'şişe',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690506467010',name:'Uludağ Premium Soda 250ml',price:12,cost:8,cat:'icecek',unit:'şişe',kdv:'10',stock:24,minStock:8},
+  {barcode:'8691216010017',name:'Avşar Soda Sade 200ml',price:7,cost:4,cat:'icecek',unit:'şişe',kdv:'10',stock:48,minStock:12},
+  {barcode:'8691216010024',name:'Avşar Soda Limon 200ml',price:8,cost:5,cat:'icecek',unit:'şişe',kdv:'10',stock:48,minStock:12},
+  {barcode:'8691216010031',name:'Avşar Soda Karışık Meyveli 200ml',price:8,cost:5,cat:'icecek',unit:'şişe',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690506468017',name:'Kızılay Maden Suyu Sade 200ml',price:8,cost:5,cat:'icecek',unit:'şişe',kdv:'10',stock:48,minStock:12},
+  {barcode:'8690506468024',name:'Kızılay Maden Suyu Limon 200ml',price:9,cost:6,cat:'icecek',unit:'şişe',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690506468031',name:'Kızılay Maden Suyu C Plus 200ml',price:10,cost:7,cat:'icecek',unit:'şişe',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690506469014',name:'Beypazarı Maden Suyu Sade 200ml',price:8,cost:5,cat:'icecek',unit:'şişe',kdv:'10',stock:48,minStock:12},
+  {barcode:'8690506469021',name:'Beypazarı Maden Suyu Limon 200ml',price:9,cost:6,cat:'icecek',unit:'şişe',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690506469038',name:'Beypazarı Meyveli Soda Nar 200ml',price:9,cost:6,cat:'icecek',unit:'şişe',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690572220014',name:'Sırma Maden Suyu Sade 200ml',price:8,cost:5,cat:'icecek',unit:'şişe',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690572220021',name:'Sırma Soda Vişne 200ml',price:9,cost:6,cat:'icecek',unit:'şişe',kdv:'10',stock:24,minStock:8},
+
+  /* ── İÇECEK (ek) ── */
+  {barcode:'8690504020013',name:'Fuse Tea Şeftali 330ml',price:18,cost:13,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504020020',name:'Fuse Tea Limon 330ml',price:18,cost:13,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504020037',name:'Fuse Tea Şeftali 1L',price:32,cost:24,cat:'icecek',unit:'şişe',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690504021010',name:'Lipton Ice Tea Şeftali 330ml',price:18,cost:13,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504021027',name:'Lipton Ice Tea Limon 1L',price:32,cost:24,cat:'icecek',unit:'şişe',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690265010010',name:'Didi Şeftali 200ml',price:10,cost:7,cat:'icecek',unit:'kutu',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690265010027',name:'Didi Vişne 200ml',price:10,cost:7,cat:'icecek',unit:'kutu',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690624010019',name:'Meysu Vişne 200ml',price:10,cost:7,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624010026',name:'Meysu Kayısı 1L',price:28,cost:20,cat:'icecek',unit:'kutu',kdv:'10',stock:15,minStock:5},
+  {barcode:'8690572440016',name:'Red Bull 250ml',price:42,cost:32,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690572440023',name:'Red Bull Sugarfree 250ml',price:42,cost:32,cat:'icecek',unit:'kutu',kdv:'10',stock:18,minStock:6},
+  {barcode:'9002490100070',name:'Red Bull 355ml',price:52,cost:40,cat:'icecek',unit:'kutu',kdv:'10',stock:12,minStock:4},
+  {barcode:'8690000310012',name:'Burn Enerji 250ml',price:35,cost:26,cat:'icecek',unit:'kutu',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690000310029',name:'Monster Enerji 500ml',price:48,cost:37,cat:'icecek',unit:'kutu',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690000320011',name:'Powerade Mavi 500ml',price:28,cost:20,cat:'icecek',unit:'şişe',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690000330010',name:'Sek Süt Kakao 200ml',price:14,cost:10,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504530017',name:'İçim Çikolatalı Süt 200ml',price:14,cost:10,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690572550012',name:'Çaykur Soğuk Çay Şeftali 330ml',price:15,cost:11,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690572660018',name:'Tamek Vişne Nektarı 1L',price:30,cost:22,cat:'icecek',unit:'kutu',kdv:'10',stock:12,minStock:4},
+  {barcode:'8690000340019',name:'Sprite Zero 330ml',price:16,cost:11,cat:'icecek',unit:'kutu',kdv:'10',stock:24,minStock:8},
+
+  /* ── MAKARNA / ERİŞTE ── */
+  {barcode:'8690504100012',name:'Filiz Spagetti 500g',price:18,cost:13,cat:'kuru-gida',unit:'paket',kdv:'1',stock:30,minStock:10},
+  {barcode:'8690504100029',name:'Filiz Burgu 500g',price:18,cost:13,cat:'kuru-gida',unit:'paket',kdv:'1',stock:30,minStock:10},
+  {barcode:'8690504100036',name:'Filiz Kalem 500g',price:18,cost:13,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504100043',name:'Filiz Fiyonk 500g',price:18,cost:13,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504100050',name:'Filiz Arpa Şehriye 500g',price:16,cost:11,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504100067',name:'Filiz Tel Şehriye 500g',price:16,cost:11,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690575010013',name:'Nuh\'un Ankara Makarnası Spagetti 500g',price:20,cost:15,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690575010020',name:'Nuh\'un Ankara Burgu 500g',price:20,cost:15,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690575010037',name:'Nuh\'un Ankara Kalem 500g',price:20,cost:15,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690055010019',name:'Barilla Spagetti No5 500g',price:32,cost:24,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690055010026',name:'Barilla Penne 500g',price:32,cost:24,cat:'kuru-gida',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504110011',name:'Piyale Spagetti 500g',price:17,cost:12,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504110028',name:'Piyale Burgu 500g',price:17,cost:12,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504110035',name:'Piyale Mantı 500g',price:28,cost:21,cat:'kuru-gida',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504120010',name:'Oba Makarna Burgu 500g',price:16,cost:11,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504130019',name:'Ev Eriştesi 250g',price:22,cost:16,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+
+  /* ── ETİ ÜRÜNLERİ ── */
+  {barcode:'8690526010015',name:'Eti Browni Intense',price:16,cost:11,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526010022',name:'Eti Browni Gold',price:17,cost:12,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690526020014',name:'Eti Canga',price:14,cost:10,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526020021',name:'Eti Canga Maxi',price:20,cost:14,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690526030013',name:'Eti Karam Çikolatalı',price:13,cost:9,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526040012',name:'Eti Negro',price:12,cost:8,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526050011',name:'Eti Topkek Kakaolu',price:11,cost:8,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526050028',name:'Eti Topkek Muzlu',price:11,cost:8,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690526060010',name:'Eti Cin Çikolatalı 3\'lü',price:10,cost:7,cat:'atistirmalik',unit:'paket',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526070019',name:'Eti Crax Çubuk Kraker',price:9,cost:6,cat:'atistirmalik',unit:'paket',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526080018',name:'Eti Çizi Kraker',price:10,cost:7,cat:'atistirmalik',unit:'paket',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690526090017',name:'Eti Form Sade Bisküvi',price:13,cost:9,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690526100016',name:'Eti Burçak Bisküvi',price:13,cost:9,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690526110015',name:'Eti Petit Beurre',price:14,cost:10,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690526120014',name:'Eti Pop Kek Çilekli',price:11,cost:8,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690526130013',name:'Eti Wanted Karamel',price:15,cost:11,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690526140012',name:'Eti Lifalif Bar',price:12,cost:8,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+
+  /* ── ÜLKER (ek) ── */
+  {barcode:'8690504200019',name:'Ülker Çikolatalı Gofret',price:13,cost:9,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504200026',name:'Ülker Albeni',price:14,cost:10,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504200033',name:'Ülker Albeni Maxi',price:20,cost:14,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504210018',name:'Ülker Çokoprens',price:11,cost:8,cat:'atistirmalik',unit:'paket',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504220017',name:'Ülker Hobby Fındıklı',price:15,cost:11,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504230016',name:'Ülker Metro Bar',price:13,cost:9,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504240015',name:'Ülker Dido',price:16,cost:11,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504250014',name:'Ülker Çubuk Kraker',price:9,cost:6,cat:'atistirmalik',unit:'paket',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504260013',name:'Ülker Pötibör Bisküvi',price:12,cost:8,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504270012',name:'Ülker Halley',price:15,cost:11,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504280011',name:'Ülker Caramio',price:14,cost:10,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504290010',name:'Ülker Rondo Burçak',price:14,cost:10,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+
+  /* ── CİPS ── */
+  {barcode:'8690624100017',name:'Lay\'s Klasik 107g',price:28,cost:20,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690624100024',name:'Lay\'s Baharatlı 107g',price:28,cost:20,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690624100031',name:'Lay\'s Fırından Yoğurtlu 107g',price:28,cost:20,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624110016',name:'Lay\'s Klasik Mini 27g',price:10,cost:7,cat:'atistirmalik',unit:'paket',kdv:'10',stock:48,minStock:15},
+  {barcode:'8690624120015',name:'Ruffles Originals 116g',price:30,cost:22,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624120022',name:'Ruffles Acı Baharatlı 116g',price:30,cost:22,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624130014',name:'Doritos Nacho Peynirli 113g',price:30,cost:22,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624130021',name:'Doritos Acı 113g',price:30,cost:22,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624140013',name:'Cheetos Peynirli 90g',price:24,cost:17,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690624140020',name:'Cheetos Mısır Çıtırı 43g',price:12,cost:8,cat:'atistirmalik',unit:'paket',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690624150012',name:'Patos Fırından Acı 90g',price:18,cost:13,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690624150029',name:'Patos Süper Acı 25g',price:7,cost:5,cat:'atistirmalik',unit:'paket',kdv:'10',stock:48,minStock:15},
+  {barcode:'8690624160011',name:'Çerezza Çıtır Çubuk 100g',price:20,cost:14,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624170010',name:'Ringo Bisküvi 100g',price:16,cost:11,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690624180019',name:'Tadım Mısır Cipsi 80g',price:18,cost:13,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+
+  /* ── KURUYEMİŞ / ÇEREZ ── */
+  {barcode:'8690504300013',name:'Tadım Tuzlu Fıstık 80g',price:25,cost:18,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504300020',name:'Tadım Karışık Kuruyemiş 150g',price:45,cost:33,cat:'atistirmalik',unit:'paket',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690504310012',name:'Tadım Çekirdek Ay 150g',price:22,cost:16,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504310029',name:'Çıtçıt Çekirdek 90g',price:14,cost:10,cat:'atistirmalik',unit:'paket',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504320011',name:'Peyman Leblebi 140g',price:20,cost:14,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504330010',name:'Tadım Antep Fıstığı 70g',price:55,cost:42,cat:'atistirmalik',unit:'paket',kdv:'10',stock:12,minStock:4},
+
+  /* ── ÇİKOLATA (tablet/bar) ── */
+  {barcode:'8690504400010',name:'Milka Sütlü Tablet 80g',price:38,cost:28,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504400027',name:'Milka Fındıklı Tablet 80g',price:40,cost:30,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504410019',name:'Ülker Çikolata Sütlü 70g',price:28,cost:20,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504410026',name:'Ülker Bitter Çikolata 70g',price:30,cost:22,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'7613035010013',name:'Nestle Damak Fındıklı 60g',price:32,cost:24,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504420018',name:'Kit Kat 4\'lü',price:22,cost:16,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504430017',name:'Snickers Bar',price:20,cost:14,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504440016',name:'Mars Bar',price:20,cost:14,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504450015',name:'Twix Bar',price:20,cost:14,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504460014',name:'Bounty Bar',price:20,cost:14,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504470013',name:'Toblerone 50g',price:35,cost:26,cat:'atistirmalik',unit:'adet',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690504480012',name:'Nutella 25g Tekli',price:14,cost:10,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504490011',name:'Haribo Altın Ayıcık 80g',price:18,cost:13,cat:'atistirmalik',unit:'paket',kdv:'10',stock:30,minStock:10},
+  {barcode:'8690504500010',name:'Damla Sakızı 100g',price:12,cost:8,cat:'atistirmalik',unit:'paket',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690504510019',name:'Olips Naneli',price:10,cost:7,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504520018',name:'Vivident Sakız Karpuz',price:11,cost:8,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504530016',name:'First Sakız Nane',price:10,cost:7,cat:'atistirmalik',unit:'adet',kdv:'10',stock:36,minStock:12},
+  {barcode:'8690504540015',name:'Mentos Nane Rulo',price:12,cost:8,cat:'atistirmalik',unit:'adet',kdv:'10',stock:30,minStock:10},
+
+  /* ── TEMEL GIDA (ek) ── */
+  {barcode:'8690504600016',name:'Yudum Ayçiçek Yağı 1L',price:75,cost:60,cat:'kuru-gida',unit:'şişe',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504600023',name:'Yudum Ayçiçek Yağı 5L',price:340,cost:285,cat:'kuru-gida',unit:'şişe',kdv:'1',stock:8,minStock:3},
+  {barcode:'8690504610015',name:'Komili Riviera Zeytinyağı 1L',price:165,cost:135,cat:'kuru-gida',unit:'şişe',kdv:'1',stock:10,minStock:3},
+  {barcode:'8690504620014',name:'Tat Domates Salçası 700g',price:48,cost:36,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504620021',name:'Tamek Domates Salçası 830g',price:52,cost:39,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504630013',name:'Tat Biber Salçası 700g',price:52,cost:39,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504640012',name:'Çaykur Rize Çayı 1kg',price:140,cost:110,cat:'kuru-gida',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504640029',name:'Lipton Yellow Label Çay 500g',price:95,cost:72,cat:'kuru-gida',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504650011',name:'Lipton Demlik Poşet 50\'li',price:75,cost:57,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504660010',name:'Nescafe Classic 100g',price:120,cost:92,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504660027',name:'Nescafe 3ü1 Arada 40\'lı',price:110,cost:85,cat:'kuru-gida',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504670019',name:'Jacobs Gold 100g',price:135,cost:105,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:10,minStock:3},
+  {barcode:'8690504680018',name:'Türk Kahvesi Kurukahveci 100g',price:55,cost:42,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504690017',name:'Toz Şeker 1kg',price:42,cost:34,cat:'kuru-gida',unit:'paket',kdv:'1',stock:30,minStock:10},
+  {barcode:'8690504690024',name:'Kesme Şeker 1kg',price:48,cost:38,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504700013',name:'Pirinç Baldo 1kg',price:58,cost:45,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504700020',name:'Pirinç Osmancık 1kg',price:52,cost:40,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504710012',name:'Bulgur Pilavlık 1kg',price:38,cost:29,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504710029',name:'Bulgur Köftelik 1kg',price:38,cost:29,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504720011',name:'Mercimek Kırmızı 1kg',price:55,cost:42,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504720028',name:'Nohut 1kg',price:62,cost:48,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504730010',name:'Kuru Fasulye 1kg',price:68,cost:53,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504740019',name:'Un 1kg',price:28,cost:21,cat:'kuru-gida',unit:'paket',kdv:'1',stock:30,minStock:10},
+  {barcode:'8690504750018',name:'İrmik 500g',price:22,cost:16,cat:'kuru-gida',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504760017',name:'Tuz İyotlu 750g',price:14,cost:9,cat:'kuru-gida',unit:'paket',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504770016',name:'Çotanak Fındık İçi 100g',price:48,cost:37,cat:'kuru-gida',unit:'paket',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504780015',name:'Sirke Üzüm 1L',price:24,cost:17,cat:'kuru-gida',unit:'şişe',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504790014',name:'Limon Sosu 1L',price:28,cost:20,cat:'kuru-gida',unit:'şişe',kdv:'1',stock:18,minStock:6},
+
+  /* ── KAHVALTILIK ── */
+  {barcode:'8690504800013',name:'Sek Kaşar Peyniri 350g',price:95,cost:75,cat:'sut',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504810012',name:'Pınar Beyaz Peynir 500g',price:90,cost:70,cat:'sut',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504820011',name:'İçim Üçgen Peynir 8\'li',price:42,cost:32,cat:'sut',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504830010',name:'Tahin 300g',price:65,cost:50,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504840019',name:'Pekmez Üzüm 380g',price:55,cost:42,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504850018',name:'Bal Çiçek 460g',price:120,cost:92,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:10,minStock:3},
+  {barcode:'8690504860017',name:'Tamek Vişne Reçeli 380g',price:45,cost:33,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504870016',name:'Tamek Çilek Reçeli 380g',price:45,cost:33,cat:'kuru-gida',unit:'kavanoz',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504880015',name:'Sana Margarin 250g',price:32,cost:24,cat:'sut',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690504890014',name:'Tereyağı 250g',price:95,cost:75,cat:'sut',unit:'paket',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504900010',name:'Zeytin Siyah Yağlı 400g',price:65,cost:50,cat:'kuru-gida',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504910019',name:'Zeytin Yeşil Kırma 400g',price:60,cost:46,cat:'kuru-gida',unit:'paket',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690504920018',name:'Yumurta 15\'li',price:90,cost:72,cat:'sut',unit:'paket',kdv:'1',stock:20,minStock:6},
+  {barcode:'8690504920025',name:'Yumurta 30\'lu',price:170,cost:138,cat:'sut',unit:'paket',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504930017',name:'Sucuk Dilim 200g',price:85,cost:66,cat:'sut',unit:'paket',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504940016',name:'Salam Dana 200g',price:55,cost:42,cat:'sut',unit:'paket',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690504950015',name:'Sosis Cocktail 250g',price:48,cost:37,cat:'sut',unit:'paket',kdv:'1',stock:15,minStock:5},
+
+  /* ── SÜT / SÜT ÜRÜNLERİ (ek) ── */
+  {barcode:'8690504960014',name:'İçim Süt Tam Yağlı 1L',price:38,cost:29,cat:'sut',unit:'kutu',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504970013',name:'Sek Süt Yarım Yağlı 1L',price:36,cost:27,cat:'sut',unit:'kutu',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504980012',name:'Sütaş Ayran 1L',price:32,cost:24,cat:'sut',unit:'kutu',kdv:'1',stock:24,minStock:8},
+  {barcode:'8690504980029',name:'Sütaş Ayran 300ml',price:12,cost:8,cat:'sut',unit:'kutu',kdv:'1',stock:36,minStock:12},
+  {barcode:'8690504990011',name:'Pınar Ayran 200ml',price:9,cost:6,cat:'sut',unit:'kutu',kdv:'1',stock:48,minStock:15},
+  {barcode:'8690505000016',name:'Sütaş Yoğurt 1kg',price:55,cost:42,cat:'sut',unit:'kova',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690505010015',name:'Danone Yoğurt 1.5kg',price:75,cost:58,cat:'sut',unit:'kova',kdv:'1',stock:15,minStock:5},
+  {barcode:'8690505020014',name:'Activia Yoğurt 4\'lü',price:42,cost:32,cat:'sut',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690505030013',name:'Danino Çilekli 4\'lü',price:38,cost:28,cat:'sut',unit:'paket',kdv:'1',stock:18,minStock:6},
+  {barcode:'8690505040012',name:'İçim Kaymak 150g',price:48,cost:37,cat:'sut',unit:'kutu',kdv:'1',stock:12,minStock:4},
+  {barcode:'8690505050011',name:'Labne Peynir 200g',price:42,cost:32,cat:'sut',unit:'kutu',kdv:'1',stock:15,minStock:5},
+
+  /* ── TEMİZLİK (ek) ── */
+  {barcode:'8690505100013',name:'Fairy Sıvı Bulaşık 650ml',price:55,cost:42,cat:'temizlik',unit:'şişe',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505110012',name:'Pril Bulaşık Deterjanı 750ml',price:48,cost:37,cat:'temizlik',unit:'şişe',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505120011',name:'Finish Bulaşık Tableti 30\'lu',price:165,cost:128,cat:'temizlik',unit:'paket',kdv:'18',stock:10,minStock:3},
+  {barcode:'8690505130010',name:'Domestos Çamaşır Suyu 750ml',price:38,cost:29,cat:'temizlik',unit:'şişe',kdv:'18',stock:24,minStock:8},
+  {barcode:'8690505140019',name:'ACE Çamaşır Suyu 1L',price:35,cost:26,cat:'temizlik',unit:'şişe',kdv:'18',stock:24,minStock:8},
+  {barcode:'8690505150018',name:'Cif Krem Temizleyici 500ml',price:42,cost:32,cat:'temizlik',unit:'şişe',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505160017',name:'Cillit Banyo Temizleyici 750ml',price:52,cost:40,cat:'temizlik',unit:'şişe',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505170016',name:'Yumoş Yumuşatıcı 1.4L',price:68,cost:53,cat:'temizlik',unit:'şişe',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505180015',name:'Omo Toz Deterjan 6kg',price:280,cost:225,cat:'temizlik',unit:'paket',kdv:'18',stock:8,minStock:3},
+  {barcode:'8690505190014',name:'Ariel Sıvı Deterjan 2.6L',price:195,cost:155,cat:'temizlik',unit:'şişe',kdv:'18',stock:10,minStock:3},
+  {barcode:'8690505200010',name:'Solo Tuvalet Kağıdı 16\'lı',price:95,cost:74,cat:'temizlik',unit:'paket',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505210019',name:'Selpak Tuvalet Kağıdı 24\'lü',price:145,cost:115,cat:'temizlik',unit:'paket',kdv:'18',stock:10,minStock:3},
+  {barcode:'8690505220018',name:'Selpak Kağıt Havlu 6\'lı',price:95,cost:74,cat:'temizlik',unit:'paket',kdv:'18',stock:12,minStock:4},
+  {barcode:'8690505230017',name:'Solo Peçete 100\'lü',price:22,cost:16,cat:'temizlik',unit:'paket',kdv:'18',stock:24,minStock:8},
+  {barcode:'8690505240016',name:'Selpak Mendil 10\'lu Cep',price:18,cost:13,cat:'temizlik',unit:'paket',kdv:'18',stock:30,minStock:10},
+  {barcode:'8690505250015',name:'Sleepy Islak Mendil 90\'lı',price:32,cost:24,cat:'temizlik',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505260014',name:'Bingo Yüzey Temizleyici 750ml',price:32,cost:24,cat:'temizlik',unit:'şişe',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505270013',name:'Test Cam Temizleyici 750ml',price:35,cost:26,cat:'temizlik',unit:'şişe',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505280012',name:'Sünger Bulaşık 3\'lü',price:18,cost:12,cat:'temizlik',unit:'paket',kdv:'18',stock:24,minStock:8},
+  {barcode:'8690505290011',name:'Çöp Poşeti Battal 10\'lu',price:32,cost:24,cat:'temizlik',unit:'paket',kdv:'18',stock:24,minStock:8},
+  {barcode:'8690505300017',name:'Çöp Poşeti Orta 30\'lu',price:28,cost:20,cat:'temizlik',unit:'paket',kdv:'18',stock:24,minStock:8},
+
+  /* ── KİŞİSEL BAKIM ── */
+  {barcode:'8690505400014',name:'Colgate Diş Macunu 75ml',price:42,cost:32,cat:'temizlik',unit:'adet',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505410013',name:'Signal Diş Macunu 75ml',price:38,cost:29,cat:'temizlik',unit:'adet',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505420012',name:'Diş Fırçası Orta',price:28,cost:20,cat:'temizlik',unit:'adet',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505430011',name:'Duru Sabun 4\'lü',price:38,cost:29,cat:'temizlik',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505440010',name:'Dove Sabun 90g',price:22,cost:16,cat:'temizlik',unit:'adet',kdv:'18',stock:24,minStock:8},
+  {barcode:'8690505450019',name:'Clear Şampuan 350ml',price:75,cost:58,cat:'temizlik',unit:'şişe',kdv:'18',stock:12,minStock:4},
+  {barcode:'8690505460018',name:'Elidor Şampuan 350ml',price:65,cost:50,cat:'temizlik',unit:'şişe',kdv:'18',stock:12,minStock:4},
+  {barcode:'8690505470017',name:'Head&Shoulders Şampuan 350ml',price:85,cost:66,cat:'temizlik',unit:'şişe',kdv:'18',stock:10,minStock:3},
+  {barcode:'8690505480016',name:'Rexona Deodorant 150ml',price:55,cost:42,cat:'temizlik',unit:'adet',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505490015',name:'Old Spice Deodorant 150ml',price:62,cost:48,cat:'temizlik',unit:'adet',kdv:'18',stock:12,minStock:4},
+  {barcode:'8690505500011',name:'Gillette Tıraş Bıçağı 5\'li',price:75,cost:58,cat:'temizlik',unit:'paket',kdv:'18',stock:12,minStock:4},
+  {barcode:'8690505510010',name:'Tıraş Köpüğü 200ml',price:48,cost:37,cat:'temizlik',unit:'adet',kdv:'18',stock:12,minStock:4},
+  {barcode:'8690505520019',name:'Orkid Hijyenik Ped 16\'lı',price:55,cost:42,cat:'temizlik',unit:'paket',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505530018',name:'Molped Hijyenik Ped 14\'lü',price:48,cost:37,cat:'temizlik',unit:'paket',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505540017',name:'Prima Bebek Bezi 4 No 32\'li',price:185,cost:148,cat:'temizlik',unit:'paket',kdv:'18',stock:8,minStock:3},
+  {barcode:'8690505550016',name:'Molfix Bebek Bezi 4 No 30\'lu',price:165,cost:130,cat:'temizlik',unit:'paket',kdv:'18',stock:8,minStock:3},
+
+  /* ── DONDURMA / SOĞUK (yazlık) ── */
+  {barcode:'8690505600018',name:'Algida Cornetto Klasik',price:28,cost:20,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690505610017',name:'Algida Magnum Klasik',price:42,cost:32,cat:'atistirmalik',unit:'adet',kdv:'10',stock:18,minStock:6},
+  {barcode:'8690505620016',name:'Algida Max Twister',price:18,cost:13,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690505630015',name:'Panda Külah Dondurma',price:22,cost:16,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+  {barcode:'8690505640014',name:'Golf Sandviç Dondurma',price:20,cost:14,cat:'atistirmalik',unit:'adet',kdv:'10',stock:24,minStock:8},
+
+  /* ── DİĞER / KIRTASIYE / EV ── */
+  {barcode:'8690505700015',name:'Pil Kalem AA 4\'lü',price:55,cost:42,cat:'diger',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505710014',name:'Pil İnce AAA 4\'lü',price:52,cost:40,cat:'diger',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505720013',name:'Çakmak Bik',price:18,cost:12,cat:'diger',unit:'adet',kdv:'18',stock:36,minStock:12},
+  {barcode:'8690505730012',name:'Mum 6\'lı',price:22,cost:16,cat:'diger',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505740011',name:'Alüminyum Folyo 10m',price:38,cost:29,cat:'diger',unit:'adet',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505750010',name:'Streç Film 30m',price:42,cost:32,cat:'diger',unit:'adet',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505760019',name:'Pişirme Kağıdı 8m',price:35,cost:26,cat:'diger',unit:'adet',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505770018',name:'Kürdan Kutu',price:12,cost:8,cat:'diger',unit:'adet',kdv:'18',stock:24,minStock:8},
+  {barcode:'8690505780017',name:'Pipet 50\'li',price:15,cost:10,cat:'diger',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505790016',name:'Karton Bardak 25\'li',price:28,cost:20,cat:'diger',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505800012',name:'Plastik Çatal-Kaşık 25\'li',price:25,cost:18,cat:'diger',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505810011',name:'Defter Çizgili 60 Yaprak',price:32,cost:24,cat:'diger',unit:'adet',kdv:'18',stock:15,minStock:5},
+  {barcode:'8690505820010',name:'A4 Kağıt 100\'lü',price:45,cost:34,cat:'diger',unit:'paket',kdv:'18',stock:12,minStock:4},
+  {barcode:'8690505830019',name:'Zarf Beyaz 10\'lu',price:18,cost:12,cat:'diger',unit:'paket',kdv:'18',stock:18,minStock:6},
+  {barcode:'8690505840018',name:'Bant Şeffaf Koli',price:22,cost:16,cat:'diger',unit:'adet',kdv:'18',stock:18,minStock:6},
   ];
   save();
 }
