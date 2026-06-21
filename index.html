@@ -662,6 +662,12 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
         <button class="xbtn p" style="width:auto;padding:8px 14px;margin:0;" onclick="openNewMust()">+ Müşteri</button>
       </div>
     </div>
+    <div style="position:relative;margin-bottom:14px;">
+      <input type="text" id="ver-search" placeholder="🔍 Müşteri ara (isim)..."
+        oninput="renderVer()"
+        style="width:100%;background:var(--s2);border:1.5px solid var(--b2);border-radius:var(--r2);padding:11px 14px;color:var(--tx);font-family:var(--ff);font-size:14px;outline:none;"
+        onfocus="this.style.borderColor='var(--am)'" onblur="this.style.borderColor='var(--b2)'">
+    </div>
     <div class="ver-grid" id="ver-grid"></div>
   </div>
 </div>
@@ -975,10 +981,11 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
       </div>
 
       <div style="background:var(--am-d);border:1px solid rgba(245,158,11,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
-        <div style="font-size:13px;font-weight:700;color:var(--am);margin-bottom:6px;">📒 Sheets'te veresiye bakiyesini elle değiştirdim?</div>
-        <div>Aynı mantık — açılışta ve her <strong style="color:var(--tx);">2 dakikada bir</strong> "Veresiye" sekmesi kontrol edilir.</div>
-        <div>Hemen görmek istersen Veresiye → <strong style="color:var(--tx);">🔄 Sheets'ten Çek</strong> butonuna bas.</div>
-        <div style="color:var(--tx3);margin-top:4px;">Eşleştirme <strong style="color:var(--tx);">isme göre</strong> yapılır. Değişiklik işlem geçmişine "Sheets'ten elle düzeltme" notuyla eklenir.</div>
+        <div style="font-size:13px;font-weight:700;color:var(--am);margin-bottom:6px;">📒 Sheets'ten veresiye çekme nasıl çalışır?</div>
+        <div><strong style="color:var(--tx);">Mevcut müşteri</strong> → Sheets'teki bakiye/limit uygulamaya yansır.</div>
+        <div><strong style="color:var(--tx);">Yeni müşteri</strong> (Sheets'te olup uygulamada olmayan) → otomatik eklenir.</div>
+        <div>Hemen yapmak için Veresiye → <strong style="color:var(--tx);">🔄 Sheets'ten Çek</strong> butonuna bas.</div>
+        <div style="color:var(--tx3);margin-top:4px;">Eşleştirme <strong style="color:var(--tx);">isme göre</strong> yapılır. Yeni müşteri ekleme yalnızca butona basınca olur (otomatik kontrolde sadece bakiye güncellenir).</div>
       </div>
 
       <div style="background:var(--pu-d);border:1px solid rgba(168,85,247,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
@@ -1845,7 +1852,14 @@ function renderVer(){
   document.getElementById('vt-asim').textContent=db.customers.filter(c=>c.limit>0&&(c.balance||0)>=c.limit).length;
   const g=document.getElementById('ver-grid');
   if(!db.customers.length){g.innerHTML='<div style="text-align:center;padding:40px;color:var(--tx3);">Henüz müşteri yok</div>';return;}
-  g.innerHTML=db.customers.map(c=>{
+
+  // Arama filtresi + bakiyeye göre sıralama (en çok borçlu üstte)
+  const q=(document.getElementById('ver-search')?.value||'').toLowerCase().trim();
+  let list=[...db.customers].sort((a,b)=>(b.balance||0)-(a.balance||0));
+  if(q) list=list.filter(c=>c.name.toLowerCase().includes(q));
+  if(!list.length){g.innerHTML='<div style="text-align:center;padding:40px;color:var(--tx3);">Müşteri bulunamadı</div>';return;}
+
+  g.innerHTML=list.map(c=>{
     const bal=c.balance||0;const pct=c.limit>0?Math.min(100,Math.round(bal/c.limit*100)):0;const over=c.limit>0&&bal>=c.limit;
     const lastTx=(c.txs||[]).slice(-1)[0];
     return `<div class="vc ${over?'overlimit':''}" onclick="openVerDetail('${c.id}')">
@@ -2854,16 +2868,16 @@ async function pullVeresiyeFromSheets(silent) {
       return;
     }
 
-    let updated = 0, mismatched = [];
+    let updated = 0, added = 0;
     sheetCustomers.forEach(sc => {
       if (!sc.name) return;
       // İsme göre eşleştir (Sheets'te id yok, sadece isim var)
       const cust = db.customers.find(c => c.name.trim().toLowerCase() === sc.name.trim().toLowerCase());
       if (cust) {
+        // MEVCUT müşteri → bakiye/limit güncelle
         const balanceChanged = Math.abs((cust.balance||0) - sc.balance) > 0.01;
         const limitChanged = Math.abs((cust.limit||0) - sc.limit) > 0.01;
         if (balanceChanged || limitChanged) {
-          // Manuel düzeltmeyi işlem geçmişine not olarak ekle (şeffaflık için)
           if (balanceChanged) {
             cust.txs = cust.txs || [];
             cust.txs.push({
@@ -2880,11 +2894,33 @@ async function pullVeresiyeFromSheets(silent) {
           updated++;
         }
       } else {
-        mismatched.push(sc.name);
+        // YENİ müşteri → SADECE manuel çekmede ekle (otomatik/sessiz modda ekleme)
+        // Aksi halde silinen müşteri 2 dk sonra otomatik geri gelir.
+        if (silent) return;
+        const newCust = {
+          id: uid(),
+          name: sc.name.trim(),
+          phone: sc.phone || '',
+          limit: sc.limit || 0,
+          balance: sc.balance || 0,
+          txs: []
+        };
+        // Açılış bakiyesi varsa işlem geçmişine kaydet (şeffaflık)
+        if (sc.balance && sc.balance > 0) {
+          newCust.txs.push({
+            type: 'veresiye',
+            amount: sc.balance,
+            date: new Date().toISOString(),
+            items: [],
+            note: 'Açılış bakiyesi (Sheets\'ten)'
+          });
+        }
+        db.customers.push(newCust);
+        added++;
       }
     });
 
-    if (updated > 0) {
+    if (updated > 0 || added > 0) {
       save();
       renderVer();
     }
@@ -2892,11 +2928,12 @@ async function pullVeresiyeFromSheets(silent) {
     if (!silent) {
       setSyncUI('ok','Güncellendi ✓');
       setTimeout(()=>setSyncUI('ok','Bağlı'),2500);
-      let msg = `✅ ${updated} müşteri bakiyesi güncellendi`;
-      if (mismatched.length) msg += ` (${mismatched.length} isim eşleşmedi)`;
-      toast(msg,'ok');
-    } else if (updated > 0) {
-      toast(`🔄 ${updated} veresiye bakiyesi Sheets'ten güncellendi`,'info');
+      let parts = [];
+      if (added > 0) parts.push(`${added} yeni müşteri eklendi`);
+      if (updated > 0) parts.push(`${updated} bakiye güncellendi`);
+      toast(parts.length ? '✅ ' + parts.join(', ') : 'Değişiklik yok, zaten güncel', 'ok');
+    } else if (added > 0 || updated > 0) {
+      toast(`🔄 Veresiye Sheets'ten güncellendi (${added} yeni, ${updated} güncel)`,'info');
     }
   } catch(e) {
     if (!silent) {
