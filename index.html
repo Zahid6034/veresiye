@@ -3312,9 +3312,13 @@ function doGet(e) {
       return json(JSON.stringify(readProductTable(ss)));
     }
 
+    if (action === 'veresiye') {
+      return json(JSON.stringify(readVeresiyeTable(ss)));
+    }
+
     const sheet = getSheet(ss, '_data');
-    const raw = sheet.getRange(1, 1).getValue();
-    const payload = raw && raw.toString().trim() ? raw.toString() : '{"customers":[],"products":[]}';
+    const raw = readChunkedData(sheet);
+    const payload = raw && raw.trim() ? raw : '{"customers":[],"products":[]}';
     return json(payload);
   } catch (err) {
     return json(JSON.stringify({ ok: false, error: err.message }));
@@ -3342,6 +3346,28 @@ function readProductTable(ss) {
     });
   }
   return products;
+}
+
+// Veresiye sekmesini OKU → güncel bakiye/limit bilgisi (elle düzenlenmiş olabilir)
+// Not: Bu sekmede işlem geçmişi (transactions) YOK, sadece özet bilgi var.
+// Uygulama tarafı, mevcut işlem geçmişini koruyup sadece bakiye/limit'i günceller.
+function readVeresiyeTable(ss) {
+  const sheet = ss.getSheetByName('Veresiye');
+  if (!sheet || sheet.getLastRow() < 2) return [];
+  const rows = sheet.getDataRange().getValues();
+  const customers = [];
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    const name = String(r[0] || '').trim();
+    if (!name) continue;
+    customers.push({
+      name: name,
+      phone: String(r[1] || '').trim(),
+      balance: parseFloat(r[2]) || 0,
+      limit: parseFloat(r[3]) || 0
+    });
+  }
+  return customers;
 }
 
 // ──────────────────────────────────────────────
@@ -3480,13 +3506,20 @@ function writeProductTableFast(ss, products) {
 
 // ──────────────────────────────────────────────
 //  Teknik veri (_data) — uygulamanın okuduğu JSON
+//  ÖNEMLİ: Google Sheets'te bir hücre EN FAZLA 50.000 karakter alır.
+//  Veri büyüyünce (çok müşteri/ürün) tek hücreye sığmaz, bu yüzden
+//  JSON'u 45.000'lik parçalara bölüp A1, A2, A3... hücrelerine yazıyoruz.
 // ──────────────────────────────────────────────
+const _DATA_CHUNK_SIZE = 45000;
+
 function saveData(ss, customers, products) {
   const sheet = getSheet(ss, '_data');
+
+  // Mevcut veriyi oku (parçalı olabilir) — eksik gönderilen kısmı korumak için
   let existing = { customers: [], products: [] };
   try {
-    const raw = sheet.getRange(1, 1).getValue();
-    if (raw) existing = JSON.parse(raw.toString());
+    const raw = readChunkedData(sheet);
+    if (raw) existing = JSON.parse(raw);
   } catch (e) {}
 
   const payload = {
@@ -3494,7 +3527,28 @@ function saveData(ss, customers, products) {
     products: products !== null ? products : existing.products,
     updated: new Date().toISOString()
   };
-  sheet.getRange(1, 1).setValue(JSON.stringify(payload));
+
+  const jsonStr = JSON.stringify(payload);
+  writeChunkedData(sheet, jsonStr);
+}
+
+// JSON'u parçalara bölüp A sütununa (A1, A2, ...) yaz
+function writeChunkedData(sheet, str) {
+  sheet.clearContents(); // eski parçaları temizle
+  const chunks = [];
+  for (let i = 0; i < str.length; i += _DATA_CHUNK_SIZE) {
+    chunks.push([str.substring(i, i + _DATA_CHUNK_SIZE)]);
+  }
+  if (chunks.length === 0) chunks.push(['']);
+  sheet.getRange(1, 1, chunks.length, 1).setValues(chunks);
+}
+
+// A sütunundaki tüm parçaları birleştirip tek JSON string döndür
+function readChunkedData(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow === 0) return '';
+  const values = sheet.getRange(1, 1, lastRow, 1).getValues();
+  return values.map(r => r[0] || '').join('');
 }
 
 // ──────────────────────────────────────────────
