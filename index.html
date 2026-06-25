@@ -536,8 +536,9 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
     <div class="sbar">
       <div class="sbar-led" id="sled">▦</div>
       <input type="text" id="sinput" placeholder="Barkod okut → otomatik ekle" autocomplete="off" autocorrect="off">
+      <button class="undo-btn" id="manual-btn" onclick="openManualAmount()" style="background:var(--am-d);color:var(--am);border-color:var(--am);">+ Tutar</button>
       <button class="undo-btn" id="undo-btn" onclick="undoLast()" disabled>↩ Geri al</button>
-      <div class="sbar-info" id="sbar-info">Enter Nakit · K Kart · Space Veresiye</div>
+      <div class="sbar-info" id="sbar-info">Enter Nakit · K Kart · Space Veresiye · T Tutar</div>
     </div>
     <div id="cart" class="cart">
       <div class="cart-empty" id="cempty">
@@ -748,6 +749,35 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
 <!-- ══ MODALS ══ -->
 
 <!-- PAY MODAL -->
+<!-- MANUEL TUTAR MODAL (tartılan ürünler için) -->
+<div class="ov" id="ov-manual">
+  <div class="modal">
+    <div class="mh"><h3>➕ Manuel Tutar Ekle</h3><button class="xb" onclick="closeOv('ov-manual')">✕</button></div>
+    <div class="mb">
+      <div class="fg">
+        <label>Ürün Adı (isteğe bağlı)</label>
+        <input type="text" id="manual-name" placeholder="Örn: Patates, Domates, Peynir..." style="font-size:14px;">
+      </div>
+      <div class="fg">
+        <label>Tutar (₺)</label>
+        <input type="number" id="manual-price" inputmode="decimal" placeholder="0" style="font-size:22px;font-weight:700;text-align:center;color:var(--am);"
+          onkeydown="if(event.key==='Enter'){event.preventDefault();confirmManualAmount();}">
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;">
+        <button class="qa" style="padding:9px 16px;font-size:14px;" onclick="setManualPrice(10)">10₺</button>
+        <button class="qa" style="padding:9px 16px;font-size:14px;" onclick="setManualPrice(20)">20₺</button>
+        <button class="qa" style="padding:9px 16px;font-size:14px;" onclick="setManualPrice(25)">25₺</button>
+        <button class="qa" style="padding:9px 16px;font-size:14px;" onclick="setManualPrice(50)">50₺</button>
+        <button class="qa" style="padding:9px 16px;font-size:14px;" onclick="setManualPrice(100)">100₺</button>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="xbtn s" style="width:auto;padding:8px 14px;margin:0;" onclick="closeOv('ov-manual')">İptal</button>
+      <button class="xbtn p" style="width:auto;padding:8px 20px;margin:0;" onclick="confirmManualAmount()">✅ Sepete Ekle</button>
+    </div>
+  </div>
+</div>
+
 <div class="ov" id="ov-pay">
   <div class="modal">
     <div class="mh"><h3 id="pay-title">Satış Onayla</h3><button class="xb" onclick="closeOv('ov-pay')">✕</button></div>
@@ -1424,6 +1454,11 @@ sinput.addEventListener('keydown',e=>{
     e.preventDefault();
     openPay('kart');
   }
+  if((e.key==='t'||e.key==='T') && !sinput.value.trim()){
+    // T → Manuel Tutar (input boşsa) — tartılan ürünler için
+    e.preventDefault();
+    openManualAmount();
+  }
 });
 
 // Keep focus
@@ -1451,6 +1486,31 @@ document.addEventListener('keydown',e=>{
   if((e.key==='+'||e.key==='=') && selectedBarcode){e.preventDefault();changeQty(selectedBarcode,1);}
   if(e.key==='-' && selectedBarcode && !sinput.value){e.preventDefault();changeQty(selectedBarcode,-1);}
 });
+
+// ── MANUEL TUTAR (tartılan ürünler için: patates, peynir vs.) ──
+function openManualAmount(){
+  document.getElementById('manual-name').value='';
+  document.getElementById('manual-price').value='';
+  document.getElementById('ov-manual').classList.add('show');
+  setTimeout(()=>document.getElementById('manual-price').focus(),150);
+}
+function setManualPrice(v){
+  document.getElementById('manual-price').value=v;
+  document.getElementById('manual-price').focus();
+}
+function confirmManualAmount(){
+  const price=parseFloat(document.getElementById('manual-price').value)||0;
+  if(price<=0){toast('Geçerli bir tutar gir','err');return;}
+  const name=document.getElementById('manual-name').value.trim()||'Açık Ürün';
+  // Her manuel ürün benzersiz olsun (aynı isimli birden fazla eklenebilsin)
+  const manualBC='MANUEL-'+Date.now();
+  cart.push({barcode:manualBC,name:name,cat:'diger',unitPrice:price,qty:1,isManual:true});
+  renderCartItem(cart[cart.length-1],true);
+  beepOk();ledFlash('ok');updateSum();
+  closeOv('ov-manual');
+  sinput.focus();
+  toast(`${esc(name)} — ${fTL(price)} eklendi`,'ok');
+}
 
 function addToCart(barcode){
   const p=db.products.find(x=>x.barcode===barcode);
@@ -1484,11 +1544,12 @@ function renderCartItem(item,isNew=false){
   const p=db.products.find(x=>x.barcode===item.barcode);
   const stockWarn=(p&&p.minStock&&p.stock!==undefined&&p.stock!==''&&+p.stock<=+p.minStock)?
     `<span class="ci-stock-warn">⚠️${p.stock}</span>`:'';
+  const subLine=item.isManual ? `${fTL(item.unitPrice)} · elle girildi` : `${fTL(item.unitPrice)} / adet · ${esc(item.barcode)}`;
   div.innerHTML=`
     <div class="ci-num">${cart.indexOf(item)+1}</div>
     <div class="ci-info">
       <div class="ci-name">${esc(item.name)}<span class="ci-badge cat-${item.cat}">${CAT[item.cat]||item.cat}</span>${stockWarn}</div>
-      <div class="ci-sub">${fTL(item.unitPrice)} / adet · ${esc(item.barcode)}</div>
+      <div class="ci-sub">${subLine}</div>
     </div>
     <div class="ci-qty-wrap">
       <button class="qb" onclick="event.stopPropagation();changeQty('${item.barcode}',-1)">−</button>
