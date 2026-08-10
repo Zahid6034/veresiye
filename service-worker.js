@@ -1,81 +1,243 @@
 /**
- * BAKKAL POS — Service Worker
- * ─────────────────────────────────────────────
- * Bu dosya uygulamayı tamamen OFFLINE çalıştırır.
- *
- * MANTIK:
- * 1. İlk açılış (internetli) → tüm dosyalar cihaza indirilir/cache'lenir
- * 2. Sonraki açılışlar → internet olsa da olmasa da CACHE'TEN açılır
- * 3. Apps Script (Sheets sync) istekleri cache'lenmez — onlar
- *    her zaman gerçek ağ bağlantısı dener, yoksa POS'taki kuyruk
- *    sistemi devreye girer (final.html içinde zaten var)
- * ─────────────────────────────────────────────
- */
 
-const CACHE_NAME = 'bakkal-pos-v1';
+* BAKKAL POS — Service Worker
+* ─────────────────────────────────────────────
+* OFFLINE + OTOMATİK GÜNCELLEME
+*
+* MANTIK:
+*
+* 1. İnternet varsa → güncel HTML GitHub'dan alınır.
+* 2. İnternet yoksa → cache'deki sürüm açılır.
+* 3. Apps Script / Google Sheets istekleri cache'lenmez.
+* 4. Yeni Service Worker geldiğinde eski cache otomatik silinir.
+* ─────────────────────────────────────────────
+  */
+
+const CACHE_NAME = 'bakkal-pos-v2';
+
 const CACHE_FILES = [
-  './',
-  './index.html',
-  './manifest.json',
-  'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap',
-  'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
+'./',
+'./index.html',
+'./manifest.json',
+'https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500;600&display=swap',
+'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'
 ];
 
-// ── KURULUM: dosyaları cache'e indir ──
+/* ══════════════════════════════════════════════
+KURULUM
+══════════════════════════════════════════════ */
+
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME)
-      .then((cache) => cache.addAll(CACHE_FILES))
-      .then(() => self.skipWaiting())
-  );
+
+event.waitUntil(
+
+```
+caches.open(CACHE_NAME)
+
+  .then((cache) => cache.addAll(CACHE_FILES))
+
+  // Yeni Service Worker'ı bekletmeden aktif et
+  .then(() => self.skipWaiting())
+```
+
+);
+
 });
 
-// ── AKTİVASYON: eski cache'leri temizle ──
+/* ══════════════════════════════════════════════
+AKTİVASYON
+Eski cache'leri temizle
+══════════════════════════════════════════════ */
+
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((names) =>
-      Promise.all(
-        names.filter((name) => name !== CACHE_NAME)
-             .map((name) => caches.delete(name))
-      )
-    ).then(() => self.clients.claim())
-  );
+
+event.waitUntil(
+
+```
+caches.keys()
+
+  .then((names) =>
+
+    Promise.all(
+
+      names
+
+        .filter((name) => name !== CACHE_NAME)
+
+        .map((name) => caches.delete(name))
+
+    )
+
+  )
+
+  // Açık olan tüm sekmelerde yeni Service Worker'ı kullan
+  .then(() => self.clients.claim())
+```
+
+);
+
 });
 
-// ── İSTEK YAKALAMA: cache-first stratejisi ──
+/* ══════════════════════════════════════════════
+İSTEK YAKALAMA
+══════════════════════════════════════════════ */
+
 self.addEventListener('fetch', (event) => {
-  const url = event.request.url;
 
-  // Apps Script / Google Sheets istekleri ASLA cache'lenmez
-  // Bunlar her zaman gerçek ağ üzerinden gider (veya kuyrukta bekler)
-  if (url.includes('script.google.com') || url.includes('docs.google.com')) {
-    event.respondWith(
-      fetch(event.request).catch(() => {
-        // Offline ise boş cevap döndür, POS'taki kuyruk sistemi
-        // bu hatayı yakalayıp işlemi bekletecek
-        return new Response('[]', { headers: { 'Content-Type': 'application/json' } });
-      })
-    );
-    return;
-  }
+const request = event.request;
+const url = request.url;
 
-  // Diğer her şey: önce cache'e bak, yoksa ağdan çek, ağdan da çekilirse cache'e ekle
-  event.respondWith(
-    caches.match(event.request).then((cached) => {
-      if (cached) return cached;
-      return fetch(event.request).then((response) => {
-        // Geçerli bir cevapsa cache'e kopyala
-        if (response && response.status === 200) {
-          const clone = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        }
-        return response;
-      }).catch(() => {
-        // Tamamen offline ve cache'te de yoksa — sadece ana sayfa için fallback
-        if (event.request.mode === 'navigate') {
-          return caches.match('./index.html');
+/* ────────────────────────────────────────────
+APPS SCRIPT / GOOGLE SHEETS
+ASLA CACHE'LEME
+──────────────────────────────────────────── */
+
+if (
+url.includes('script.google.com') ||
+url.includes('docs.google.com')
+) {
+
+```
+event.respondWith(
+
+  fetch(request)
+
+    .catch(() => {
+
+      // Offline ise POS'un kuyruk sistemi devreye girsin
+      return new Response('[]', {
+        headers: {
+          'Content-Type': 'application/json'
         }
       });
+
     })
-  );
+
+);
+
+return;
+```
+
+}
+
+/* ────────────────────────────────────────────
+HTML / ANA SAYFA
+
+```
+ İNTERNET VARSA:
+ Önce GitHub'dan güncel sürümü al.
+
+ İNTERNET YOKSA:
+ Cache'deki sürümü kullan.
+ ──────────────────────────────────────────── */
+```
+
+if (request.mode === 'navigate') {
+
+```
+event.respondWith(
+
+  fetch(request)
+
+    .then((response) => {
+
+      // Güncel HTML başarıyla geldiyse cache'i güncelle
+      if (
+        response &&
+        response.status === 200
+      ) {
+
+        const clone = response.clone();
+
+        caches.open(CACHE_NAME)
+          .then((cache) => {
+
+            cache.put(request, clone);
+
+          });
+
+      }
+
+      return response;
+
+    })
+
+    .catch(() => {
+
+      // İnternet yok → cache'deki HTML'yi aç
+      return caches.match('./index.html');
+
+    })
+
+);
+
+return;
+```
+
+}
+
+/* ────────────────────────────────────────────
+DİĞER DOSYALAR
+
+```
+ JS / CSS / görseller vb.
+ Önce cache'e bak.
+ Cache'te yoksa internetten al.
+ ──────────────────────────────────────────── */
+```
+
+event.respondWith(
+
+```
+caches.match(request)
+
+  .then((cached) => {
+
+    // Cache'te varsa kullan
+    if (cached) {
+      return cached;
+    }
+
+
+    // Cache'te yoksa internetten getir
+    return fetch(request)
+
+      .then((response) => {
+
+        if (
+          response &&
+          response.status === 200
+        ) {
+
+          const clone = response.clone();
+
+          caches.open(CACHE_NAME)
+            .then((cache) => {
+
+              cache.put(request, clone);
+
+            });
+
+        }
+
+        return response;
+
+      });
+
+  })
+
+  .catch(() => {
+
+    // Tamamen offline durumda
+    if (request.mode === 'navigate') {
+
+      return caches.match('./index.html');
+
+    }
+
+  })
+```
+
+);
+
 });
