@@ -1150,9 +1150,26 @@ function getGsApi() {
 // ══════════════════════════════════════════════════
 let gsQueue = [];
 let gsSyncing = false;
+let gsNetworkRetryCount = 0;
+let gsNextRetryAt = 0;
+let customerDataRevision = 0;
+let lastCustomerChangeAt = 0;
 function loadQueue(){ try{gsQueue=JSON.parse(localStorage.getItem('bkl_q')||'[]');}catch(e){gsQueue=[];} }
 function saveQueue(){ localStorage.setItem('bkl_q', JSON.stringify(gsQueue)); }
 function queueCount(){ return gsQueue.length; }
+
+// Yerelde müşteri/veresiye değiştiğinde devam eden eski Sheets GET cevaplarının
+// yeni kaydı ezmesini engellemek için hafif bir revizyon işareti tut.
+function markCustomerChanged(){
+  customerDataRevision++;
+  lastCustomerChangeAt = Date.now();
+}
+function automaticCustomerPullBlocked(revisionAtStart){
+  return gsQueue.length > 0 ||
+    gsSyncing ||
+    (revisionAtStart !== undefined && revisionAtStart !== customerDataRevision) ||
+    (lastCustomerChangeAt > 0 && Date.now() - lastCustomerChangeAt < 15000);
+}
 
 // ── SENKRON GÜNLÜĞÜ ──
 // Her gönderim denemesini kaydeder (başarılı/başarısız), Ayarlar'da görülebilir
@@ -1190,11 +1207,13 @@ function setSyncUI(state, msg) {
 async function processQueue() {
   if (gsSyncing || gsQueue.length === 0) return;
   if (!navigator.onLine) { setSyncUI('offline', 'Çevrimdışı'); return; }
+  if (Date.now() < gsNextRetryAt) { setSyncUI('offline', 'Bağlantı bekleniyor'); return; }
   gsSyncing = true;
   setSyncUI('syncing', 'Kaydediliyor');
   const api = getGsApi();
   let failCount = 0;
   let lastError = null;
+  let connectionFailed = false;
 
   while (gsQueue.length > 0 && failCount < 3) {
     const item = gsQueue[0];
@@ -1214,6 +1233,8 @@ async function processQueue() {
         gsQueue.shift();
         saveQueue();
         logSyncEvent('ok', item, text);
+        gsNetworkRetryCount = 0;
+        gsNextRetryAt = 0;
       } else if (getErrorFromResponse(parsed)) {
         // Sunucu hata döndürdü (örn. kod hatası, izin sorunu)
         lastError = getErrorFromResponse(parsed);
@@ -1228,16 +1249,25 @@ async function processQueue() {
         break;
       }
     } catch(e) {
-      lastError = e.message;
+      // fetch() ağ yokken TypeError/"Failed to fetch" üretir. Bu bir kayıt
+      // hatası değildir: öğe kuyrukta kalır ve bağlantı gelince tekrar gider.
+      connectionFailed = true;
       failCount++;
       logSyncEvent('network_error', item, e.message);
+      gsNetworkRetryCount++;
+      const retryDelay = Math.min(300000, 15000 * Math.pow(2, Math.min(gsNetworkRetryCount - 1, 4)));
+      gsNextRetryAt = Date.now() + retryDelay;
       break; // bağlantı koptu, sonra tekrar dene
     }
   }
   gsSyncing = false;
   if (gsQueue.length > 0) {
-    setSyncUI('queue', lastError ? 'Hata: '+String(lastError).slice(0,30) : 'Bekliyor');
-    if (lastError) console.error('Sync hatası:', lastError);
+    if (connectionFailed || !navigator.onLine) {
+      setSyncUI('offline', 'Çevrimdışı');
+    } else {
+      setSyncUI('queue', lastError ? 'Hata: '+String(lastError).slice(0,30) : 'Bekliyor');
+      if (lastError) console.error('Sync hatası:', lastError);
+    }
   } else {
     setSyncUI('ok', 'Yedeklendi ✓');
     setTimeout(() => setSyncUI('ok', 'Bağlı'), 2500);
@@ -1323,12 +1353,20 @@ function gsSendSale(sale) {
 // VERESİYE + ÜRÜN ← Sheets'ten yükle (yeni {customers,products} formatı)
 async function gsLoadCustomers() {
   const api = getGsApi();
+  const revisionAtStart = customerDataRevision;
+  if (!navigator.onLine || gsQueue.length > 0 || gsSyncing) {
+    setSyncUI(navigator.onLine ? 'queue' : 'offline', navigator.onLine ? 'Bekliyor' : 'Çevrimdışı');
+    return false;
+  }
   setSyncUI('syncing', 'Yükleniyor');
   try {
     const res = await fetch(api, {cache:'no-cache'});
     const text = await res.text();
     let data;
     try { data = JSON.parse(text); } catch(e){ data = null; }
+
+    // İstek sürerken yerelde kayıt oluştuysa bu eski cevabı uygulama.
+    if (automaticCustomerPullBlocked(revisionAtStart)) return false;
 
     // Yeni format: {customers:[...], products:[...]}
     if (data && data.customers) {
@@ -1355,12 +1393,13 @@ async function gsLoadCustomers() {
 }
 
 function mapCustomer(c){
+  const parsedBalance = parseFloat(c.balance);
   return {
     id: c.id || uid(), name: c.name,
     phone: c.phone||c.tel||'',
     limit: parseFloat(c.limit)||0,
-    balance: parseFloat(c.balance) ||
-      (c.transactions||[]).reduce((a,t)=>t.type==='debt'?a+t.amount:a-t.amount, 0) || 0,
+    balance: Number.isFinite(parsedBalance) ? parsedBalance :
+      ((c.transactions||[]).reduce((a,t)=>t.type==='debt'?a+(parseFloat(t.amount)||0):a-(parseFloat(t.amount)||0), 0) || 0),
     txs: (c.transactions||c.txs||[]).map(t=>({
       type: t.type==='debt' ? 'veresiye' : (t.type||'nakit'),
       amount: parseFloat(t.amount)||0,
@@ -1371,12 +1410,18 @@ function mapCustomer(c){
 }
 
 // İnternet geri geldiğinde otomatik kuyruk boşalt
-window.addEventListener('online', () => { setSyncUI('ok','Bağlandı'); processQueue(); });
+window.addEventListener('online', () => {
+  gsNetworkRetryCount = 0;
+  gsNextRetryAt = 0;
+  setSyncUI('ok','Bağlandı');
+  processQueue();
+});
 window.addEventListener('offline', () => setSyncUI('offline','Çevrimdışı'));
 
 // 60s polling — başka cihazdan veresiye değişti mi?
 setInterval(async () => {
-  if (document.hidden || gsQueue.length > 0 || !navigator.onLine) return;
+  const revisionAtStart = customerDataRevision;
+  if (document.hidden || !navigator.onLine || automaticCustomerPullBlocked(revisionAtStart)) return;
   const api = getGsApi();
   try {
     const res = await fetch(api, {cache:'no-cache'});
@@ -1384,6 +1429,9 @@ setInterval(async () => {
     let data; try{data=JSON.parse(text);}catch(e){return;}
     const fresh = data && data.customers ? data.customers : (Array.isArray(data)?data:null);
     if (!fresh) return;
+    // GET başladıktan sonra yeni veresiye/ödeme kaydedilmiş olabilir.
+    // Bu durumda gelen cevap eski sayılır ve yerel veriyi ezmesine izin verilmez.
+    if (automaticCustomerPullBlocked(revisionAtStart)) return;
     const freshSig = JSON.stringify(fresh.map(c=>c.id+(c.balance||0)).sort());
     const localSig = JSON.stringify(db.customers.map(c=>c.id+(c.balance||0)).sort());
     if (fresh.length > 0 && freshSig !== localSig) {
@@ -1395,7 +1443,9 @@ setInterval(async () => {
 }, 60000);
 
 // Kuyruk tekrar deneme — 20s'de bir
-setInterval(() => { if (gsQueue.length > 0 && !gsSyncing && navigator.onLine) processQueue(); }, 20000);
+setInterval(() => {
+  if (gsQueue.length > 0 && !gsSyncing && navigator.onLine && Date.now() >= gsNextRetryAt) processQueue();
+}, 20000);
 
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7);}
 function todayISO(){return new Date().toISOString().split('T')[0];}
@@ -1761,6 +1811,7 @@ function confirmSale(){
     cust.balance=(cust.balance||0)+total;
     cust.txs=cust.txs||[];
     cust.txs.push({type:'veresiye',amount:total,date:sale.date,saleId:sale.id,items:cart.map(c=>({name:c.name,qty:c.qty,price:c.unitPrice})),note:''});
+    markCustomerChanged();
   }
   save();
   checkBackupReminder(); // uzun süre offline kalındıysa yedek hatırlat
@@ -1955,6 +2006,7 @@ function takePayment(){
   c.txs=c.txs||[];
   c.txs.push({type:tip,amount:amt,date:new Date().toISOString(),items:[],note:'Ödeme alındı'});
   db.sales.push({id:uid(),date:new Date().toISOString(),items:[],total:amt,method:tip,customer:c.name,customerId:c.id,note:'Veresiye ödemesi'});
+  markCustomerChanged();
   save();toast(`${fTL(amt)} alındı`,'ok');
   gsSaveCustomers();
   openVerDetail(detCustId);renderVer();
@@ -1968,6 +2020,7 @@ function openNewMust(fromPay=false){
 function saveMust(){
   const name=document.getElementById('m-ad').value.trim();if(!name){toast('İsim zorunlu','err');return;}
   db.customers.push({id:uid(),name,phone:document.getElementById('m-tel').value.trim(),limit:parseFloat(document.getElementById('m-lim').value)||0,balance:0,txs:[]});
+  markCustomerChanged();
   save();renderVer();closeOv('ov-must');
   gsSaveCustomers();
   if(fromPayMust){renderCustGrid();}
@@ -1983,6 +2036,7 @@ function editMust(){
   window.saveMust=function(){
     const name=document.getElementById('m-ad').value.trim();if(!name){toast('İsim zorunlu','err');return;}
     c.name=name;c.phone=document.getElementById('m-tel').value.trim();c.limit=parseFloat(document.getElementById('m-lim').value)||0;
+    markCustomerChanged();
     save();renderVer();closeOv('ov-must');openVerDetail(detCustId);toast('Güncellendi','ok');
     gsSaveCustomers();
     window.saveMust=orig;
@@ -1991,6 +2045,7 @@ function editMust(){
 function delMust(){
   if(!confirm('Müşteri silinsin mi?')) return;
   db.customers=db.customers.filter(x=>x.id!==detCustId);
+  markCustomerChanged();
   save();renderVer();closeOv('ov-ver');gsSaveCustomers();toast('Silindi','ok');
 }
 
@@ -2841,6 +2896,13 @@ function openImportModal() {
 // silent=true ise toast/uyarı göstermez, sadece sessizce günceller (otomatik kontrol için)
 async function pullPricesFromSheets(silent) {
   const api = getGsApi();
+  if (!navigator.onLine) {
+    if (!silent) {
+      setSyncUI('offline','Çevrimdışı');
+      toast('İnternet yok — yerel kayıtlar korunuyor','info');
+    }
+    return;
+  }
   if (!silent) {
     setSyncUI('syncing','Fiyatlar çekiliyor');
     toast('Sheets\'ten güncel fiyatlar çekiliyor...','info');
@@ -2911,6 +2973,17 @@ async function pullPricesFromSheets(silent) {
 // İşlem geçmişi (txs) KORUNUR — sadece bakiye/limit/telefon güncellenir.
 async function pullVeresiyeFromSheets(silent) {
   const api = getGsApi();
+  const revisionAtStart = customerDataRevision;
+  // Bekleyen/gönderilmekte olan yerel kayıt varken Sheets bakiyesini çekmek,
+  // eski bakiyeyi "düzeltme" gibi uygulayıp yeni veresiyeyi geri alabiliyordu.
+  if (!navigator.onLine || automaticCustomerPullBlocked(revisionAtStart)) {
+    if (!silent) {
+      const offline = !navigator.onLine;
+      setSyncUI(offline ? 'offline' : 'queue', offline ? 'Çevrimdışı' : 'Önce kayıtlar gönderiliyor');
+      toast(offline ? 'İnternet yok — yerel kayıtlar korunuyor' : 'Bekleyen kayıtlar gönderildikten sonra tekrar dene','info');
+    }
+    return;
+  }
   if (!silent) {
     setSyncUI('syncing','Veresiye çekiliyor');
     toast('Sheets\'ten güncel veresiye bilgisi çekiliyor...','info');
@@ -2920,6 +2993,9 @@ async function pullVeresiyeFromSheets(silent) {
     const text = await res.text();
     let sheetCustomers;
     try { sheetCustomers = JSON.parse(text); } catch(e){ sheetCustomers = null; }
+
+    // İstek devam ederken veresiye/ödeme kaydedildiyse cevap artık eskidir.
+    if (automaticCustomerPullBlocked(revisionAtStart)) return;
 
     if (!Array.isArray(sheetCustomers) || sheetCustomers.length === 0) {
       if (!silent) {
