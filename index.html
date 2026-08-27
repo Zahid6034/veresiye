@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>Bakkal POS</title>
+<title>ZAHİD MARKET</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0f0f11">
 <meta name="mobile-web-app-capable" content="yes">
@@ -3441,7 +3441,10 @@ const SPREADSHEET_ID = '1-vFQHt0mL2KWLiMBjN2HoeFWuJqXN6wJVw6UqdV0DkE';
 //  ?action=products → sadece Urunler sekmesindeki güncel fiyatları döndür
 // ──────────────────────────────────────────────
 function doGet(e) {
+  const lock = LockService.getScriptLock();
   try {
+    // POST tabloyu temizleyip yeniden yazarken yarım/eski veri okunmasın.
+    lock.waitLock(30000);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
     const action = (e && e.parameter && e.parameter.action) || '';
 
@@ -3459,6 +3462,8 @@ function doGet(e) {
     return json(payload);
   } catch (err) {
     return json(JSON.stringify({ ok: false, error: err.message }));
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
   }
 }
 
@@ -3512,13 +3517,17 @@ function readVeresiyeTable(ss) {
 //  HIZLI: tek satır eklemeler appendRow yerine batch yapılır
 // ──────────────────────────────────────────────
 function doPost(e) {
+  const lock = LockService.getScriptLock();
   try {
+    // Aynı anda iki cihaz veya kuyruk isteği Sheets'i birbirinin üstüne yazmasın.
+    lock.waitLock(30000);
     const body = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
     // ── 1. SATIŞ kaydı (HIZLI — sadece 1 satır ekler, ms sürer) ──
     if (body.type === 'sale') {
       logSaleFast(ss, body);
+      SpreadsheetApp.flush();
       return json('{"ok":true,"type":"sale"}');
     }
 
@@ -3529,6 +3538,7 @@ function doPost(e) {
       if (body.products && body.products.length) {
         writeProductTableFast(ss, body.products);
       }
+      SpreadsheetApp.flush();
       return json('{"ok":true,"type":"sync"}');
     }
 
@@ -3536,12 +3546,15 @@ function doPost(e) {
     if (Array.isArray(body)) {
       saveData(ss, body, null);
       writeCustomerTableFast(ss, body);
+      SpreadsheetApp.flush();
       return json('{"ok":true,"type":"legacy"}');
     }
 
     return json('{"ok":false,"error":"bilinmeyen istek tipi"}');
   } catch (err) {
     return json(JSON.stringify({ ok: false, error: err.message }));
+  } finally {
+    if (lock.hasLock()) lock.releaseLock();
   }
 }
 
@@ -3565,6 +3578,16 @@ function logSaleFast(ss, sale) {
   const musteri = sale.musteri || '';
   const fisNo = sale.id || '';
   const items = sale.items || [];
+
+  // İnternet cevap dönmeden kesilirse HTML aynı kuyruk öğesini tekrar yollar.
+  // Aynı fiş numarası daha önce yazıldıysa ikinci kez satış oluşturma.
+  if (fisNo && sheet.getLastRow() > 1) {
+    const existing = sheet.getRange(2, 9, sheet.getLastRow() - 1, 1)
+      .createTextFinder(String(fisNo))
+      .matchEntireCell(true)
+      .findNext();
+    if (existing) return;
+  }
 
   if (items.length === 0) {
     sheet.appendRow([sale.aciklama || 'İşlem', '', '', sale.toplam || 0, tarih, saat, odeme, musteri, fisNo]);
