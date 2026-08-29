@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
-<title>ZAHİD MARKET</title>
+<title>Bakkal POS</title>
 <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#0f0f11">
 <meta name="mobile-web-app-capable" content="yes">
@@ -508,7 +508,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
 
 <!-- TOPBAR -->
 <div class="tb">
-  <div class="tb-logo">🏪 ZAHİD MARKET</div>
+  <div class="tb-logo">🏪 Bakkal</div>
   <button class="nb active" id="nb-pos" onclick="go('pos')"><span class="i">🖥️</span>Satış</button>
   <button class="nb" id="nb-urun" onclick="go('urun')"><span class="i">▦</span>Ürünler</button>
   <button class="nb" id="nb-ver" onclick="go('ver')"><span class="i">📒</span>Veresiye</button>
@@ -1020,7 +1020,8 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
 
       <div style="background:var(--pu-d);border:1px solid rgba(168,85,247,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
         <div style="font-size:13px;font-weight:700;color:var(--pu);margin-bottom:6px;">🔒 Uzun süre (haftalarca) internetsiz kalırsam?</div>
-        <div>Tüm satış/veresiye verisi <strong style="color:var(--tx);">cihazda</strong> güvenle birikir, kaybolmaz.</div>
+        <div>Tüm satış/veresiye gönderimleri <strong style="color:var(--tx);">cihazdaki büyük IndexedDB kuyruğunda</strong> birikir.</div>
+        <div>İnternet gelince 50'şerli toplu gönderilir; Sheets onayladıkça gönderilenler kuyruktan silinir.</div>
         <div>25 satışta bir, hâlâ offline isen <strong style="color:var(--tx);">yedek dosyası indirmen</strong> için hatırlatma çıkar.</div>
         <div>Ayrıca her kayıt otomatik <strong style="color:var(--tx);">2. bir güvenlik kopyası</strong> olarak da tutulur.</div>
         <button class="xbtn s" style="width:auto;padding:6px 12px;margin-top:8px;font-size:11px;" onclick="restoreFromSafetyBackup()">♻️ Güvenlik Yedeğinden Geri Yükle</button>
@@ -1029,7 +1030,7 @@ body{background:var(--bg);color:var(--tx);font-family:var(--ff);display:flex;fle
       <div style="background:var(--rd-d);border:1px solid rgba(239,68,68,.3);border-radius:var(--r2);padding:14px;margin-bottom:16px;font-size:12px;line-height:1.7;color:var(--tx2);">
         <div style="font-size:13px;font-weight:700;color:var(--rd);margin-bottom:6px;">🆘 Geçmişte Sheets'e gitmemiş satışlar var mı?</div>
         <div>Eski bir sürüm kullanırken bazı satışların Sheets'e ulaşmadığını fark ettiysen, bu buton <strong style="color:var(--tx);">cihazdaki TÜM satış geçmişini</strong> tekrar Sheets'e gönderir.</div>
-        <div style="color:var(--am);margin-top:4px;">⚠️ Daha önce gitmiş satışlar Sheets'te 2 kere görünebilir (Fiş No ile ayırt edilir).</div>
+        <div style="color:var(--am);margin-top:4px;">Fiş No kontrolü sayesinde daha önce gitmiş satışlar ikinci kez yazılmaz.</div>
         <button id="resend-history-btn" class="xbtn s" style="width:auto;padding:6px 12px;margin-top:8px;font-size:11px;border-color:var(--rd);color:var(--rd);" onclick="resendAllSalesHistory()">📤 Tüm Satış Geçmişini Yeniden Gönder</button>
         <div id="resend-status" style="font-size:11px;color:var(--tx3);margin-top:6px;font-family:var(--fm);"></div>
       </div>
@@ -1114,11 +1115,31 @@ const CAT={sigara:'Sigara',icecek:'İçecek','kuru-gida':'Kuru Gıda',sut:'Süt'
 const CATC={sigara:'var(--rd)',icecek:'var(--bl)','kuru-gida':'var(--am)',sut:'var(--gr)',atistirmalik:'var(--or)',temizlik:'var(--pu)',diger:'var(--tx3)'};
 
 let db={products:[],sales:[],customers:[],alimlar:[]};
+function isStorageQuotaError(e){
+  return !!e && (e.name==='QuotaExceededError' || e.name==='NS_ERROR_DOM_QUOTA_REACHED' || e.code===22 || e.code===1014);
+}
 function save(){
+  const raw=JSON.stringify(db);
   try{
-    localStorage.setItem(KEY,JSON.stringify(db));
+    localStorage.setItem(KEY,raw);
     writeSafetyBackup(); // ikinci kopya, ekstra güvenlik
-  }catch(e){toast('Kayıt hatası','err');}
+    return true;
+  }catch(e){
+    if(isStorageQuotaError(e)){
+      // Eski dev sync kopyalarını küçült ve ikinci güvenlik kopyasını kaldır.
+      // Ana kasa verisi her zaman kuyruktan ve yedek kopyadan daha önceliklidir.
+      try{ compactQueue(); saveQueue(); }catch(_e){}
+      try{ localStorage.removeItem('bkl_v3_safety_backup'); }catch(_e){}
+      try{ localStorage.removeItem('bkl_sync_log'); }catch(_e){}
+      try{
+        localStorage.setItem(KEY,raw);
+        writeSafetyBackup();
+        return true;
+      }catch(_e){}
+    }
+    toast('Depolama dolu — işlem kaydedilemedi','err');
+    return false;
+  }
 }
 function load(){try{const r=localStorage.getItem(KEY);if(r)db={...db,...JSON.parse(r)};}catch(e){}}
 
@@ -1144,9 +1165,11 @@ function getGsApi() {
 
 // ══════════════════════════════════════════════════
 //  SYNC MİMARİSİ
-//  • localStorage = ana hafıza (offline ÇALIŞIR)
+//  • localStorage = ana kasa verisi (offline ÇALIŞIR)
+//  • IndexedDB = büyük ve kalıcı gönderim kuyruğu
 //  • Google Sheets = otomatik yedek + çoklu cihaz
-//  • İnternet yoksa → kuyruğa eklenir, gelince gönderilir
+//  • İnternet yoksa → IndexedDB'ye eklenir, gelince toplu gönderilir
+//  • Sheets onay verince → gönderilen kuyruk kayıtları cihazdan silinir
 // ══════════════════════════════════════════════════
 let gsQueue = [];
 let gsSyncing = false;
@@ -1154,8 +1177,117 @@ let gsNetworkRetryCount = 0;
 let gsNextRetryAt = 0;
 let customerDataRevision = 0;
 let lastCustomerChangeAt = 0;
-function loadQueue(){ try{gsQueue=JSON.parse(localStorage.getItem('bkl_q')||'[]');}catch(e){gsQueue=[];} }
-function saveQueue(){ localStorage.setItem('bkl_q', JSON.stringify(gsQueue)); }
+let queueReadyPromise = Promise.resolve();
+let queuePersistChain = Promise.resolve(true);
+let queueDbPromise = null;
+let queueStorageMode = 'indexeddb';
+
+function openQueueDb(){
+  if(queueDbPromise) return queueDbPromise;
+  queueDbPromise=new Promise((resolve,reject)=>{
+    if(!window.indexedDB){ reject(new Error('IndexedDB desteklenmiyor')); return; }
+    const req=window.indexedDB.open('bkl_pos_queue',1);
+    req.onupgradeneeded=()=>{
+      const idb=req.result;
+      if(!idb.objectStoreNames.contains('state')) idb.createObjectStore('state',{keyPath:'key'});
+    };
+    req.onsuccess=()=>resolve(req.result);
+    req.onerror=()=>reject(req.error||new Error('IndexedDB açılamadı'));
+    req.onblocked=()=>reject(new Error('IndexedDB engellendi'));
+  });
+  return queueDbPromise;
+}
+async function readQueueFromIndexedDb(){
+  const idb=await openQueueDb();
+  return new Promise((resolve,reject)=>{
+    const tx=idb.transaction('state','readonly');
+    const req=tx.objectStore('state').get('main');
+    req.onsuccess=()=>resolve(req.result&&Array.isArray(req.result.items)?req.result.items:[]);
+    req.onerror=()=>reject(req.error||new Error('Kuyruk okunamadı'));
+  });
+}
+async function writeQueueToIndexedDb(items){
+  const idb=await openQueueDb();
+  return new Promise((resolve,reject)=>{
+    const tx=idb.transaction('state','readwrite');
+    tx.objectStore('state').put({key:'main',items,updated:Date.now()});
+    tx.oncomplete=()=>resolve(true);
+    tx.onerror=()=>reject(tx.error||new Error('Kuyruk yazılamadı'));
+    tx.onabort=()=>reject(tx.error||new Error('Kuyruk yazımı iptal edildi'));
+  });
+}
+function compactQueue(){
+  const sales=[];
+  const other=[];
+  const seenSaleIds=new Set();
+  let needsFullSync=false;
+
+  (Array.isArray(gsQueue)?gsQueue:[]).forEach(item=>{
+    if(!item || typeof item!=='object') return;
+    if(item.type==='sync' || item.type==='sync_ref'){
+      // Eski sürüm her değişiklikte tüm müşteri/ürün verisini tekrar saklıyordu.
+      // Bunların tamamı yerine yalnızca "son halini gönder" işareti yeterlidir.
+      needsFullSync=true;
+      return;
+    }
+    if(item.type==='sale'){
+      if(item.id && seenSaleIds.has(item.id)) return;
+      if(item.id) seenSaleIds.add(item.id);
+      sales.push(item);
+      return;
+    }
+    other.push(item);
+  });
+
+  gsQueue=[...sales,...other];
+  if(needsFullSync) gsQueue.push({type:'sync_ref'});
+  return gsQueue;
+}
+async function loadQueue(){
+  let legacyQueue=[];
+  let indexedQueue=[];
+  try{ legacyQueue=JSON.parse(localStorage.getItem('bkl_q')||'[]'); }
+  catch(e){ legacyQueue=[]; }
+  try{ indexedQueue=await readQueueFromIndexedDb(); }
+  catch(e){ queueStorageMode='localstorage'; }
+
+  // Güncelleme öncesi localStorage kuyruğu ile IndexedDB kuyruğunu birleştir;
+  // satış kimlikleri compactQueue() içinde tekilleştirilir.
+  gsQueue=[...(Array.isArray(indexedQueue)?indexedQueue:[]),...(Array.isArray(legacyQueue)?legacyQueue:[])];
+  compactQueue();
+  await saveQueue();
+  try{
+    if(navigator.storage && navigator.storage.persist){
+      const alreadyPersistent=navigator.storage.persisted ? await navigator.storage.persisted() : false;
+      if(!alreadyPersistent) await navigator.storage.persist();
+    }
+  }catch(e){}
+  return gsQueue;
+}
+function saveQueue(){
+  compactQueue();
+  const snapshot=JSON.parse(JSON.stringify(gsQueue));
+  queuePersistChain=queuePersistChain.catch(()=>false).then(async()=>{
+    try{
+      await writeQueueToIndexedDb(snapshot);
+      queueStorageMode='indexeddb';
+      // Başarılı geçişten sonra küçük localStorage kotasını tamamen serbest bırak.
+      try{ localStorage.removeItem('bkl_q'); }catch(_e){}
+      return true;
+    }catch(e){
+      queueStorageMode='localstorage';
+      const raw=JSON.stringify(snapshot);
+      try{ localStorage.setItem('bkl_q',raw); return true; }
+      catch(_e){
+        try{ localStorage.removeItem('bkl_v3_safety_backup'); }catch(__e){}
+        try{ localStorage.removeItem('bkl_sync_log'); }catch(__e){}
+        try{ localStorage.setItem('bkl_q',raw); return true; }catch(__e){}
+      }
+      return false;
+    }
+  });
+  return queuePersistChain;
+}
 function queueCount(){ return gsQueue.length; }
 
 // Yerelde müşteri/veresiye değiştiğinde devam eden eski Sheets GET cevaplarının
@@ -1205,6 +1337,7 @@ function setSyncUI(state, msg) {
 
 // Kuyruktaki işlemleri sırayla gönder
 async function processQueue() {
+  await queueReadyPromise;
   if (gsSyncing || gsQueue.length === 0) return;
   if (!navigator.onLine) { setSyncUI('offline', 'Çevrimdışı'); return; }
   if (Date.now() < gsNextRetryAt) { setSyncUI('offline', 'Bağlantı bekleniyor'); return; }
@@ -1216,7 +1349,25 @@ async function processQueue() {
   let connectionFailed = false;
 
   while (gsQueue.length > 0 && failCount < 3) {
-    const item = gsQueue[0];
+    const firstItem = gsQueue[0];
+    let item = firstItem;
+    let completedCount = 1;
+
+    // Bağlantı geri geldiğinde satışları tek tek değil, 50'şerli tek istekte gönder.
+    if(firstItem.type==='sale'){
+      const sales=[];
+      for(let i=0;i<gsQueue.length && sales.length<50;i++){
+        if(gsQueue[i].type!=='sale') break;
+        sales.push(gsQueue[i]);
+      }
+      if(sales.length>1){
+        item={type:'sales_batch',sales};
+        completedCount=sales.length;
+      }
+    }else if(firstItem.type==='sync_ref'){
+      // Büyük snapshot kuyrukta tutulmaz; gönderileceği anda db'nin son hali üretilir.
+      item=buildFullSyncPayload();
+    }
     try {
       // GERÇEK cevabı oku — Apps Script'in işi yapıp yapmadığını DOĞRULA
       const res = await fetch(api, {
@@ -1230,11 +1381,12 @@ async function processQueue() {
 
       if (isSuccessResponse(parsed)) {
         // Gerçekten başarılı — sunucu onayladı
-        gsQueue.shift();
-        saveQueue();
+        gsQueue.splice(0,completedCount);
+        await saveQueue(); // Sheets onayı sonrası gönderilen kayıt IndexedDB'den silinir
         logSyncEvent('ok', item, text);
         gsNetworkRetryCount = 0;
         gsNextRetryAt = 0;
+        if(gsQueue.length>0) setSyncUI('syncing', `Kaydediliyor (${gsQueue.length})`);
       } else if (getErrorFromResponse(parsed)) {
         // Sunucu hata döndürdü (örn. kod hatası, izin sorunu)
         lastError = getErrorFromResponse(parsed);
@@ -1255,7 +1407,7 @@ async function processQueue() {
       failCount++;
       logSyncEvent('network_error', item, e.message);
       gsNetworkRetryCount++;
-      const retryDelay = Math.min(300000, 15000 * Math.pow(2, Math.min(gsNetworkRetryCount - 1, 4)));
+      const retryDelay = Math.min(60000, 5000 * Math.pow(2, Math.min(gsNetworkRetryCount - 1, 4)));
       gsNextRetryAt = Date.now() + retryDelay;
       break; // bağlantı koptu, sonra tekrar dene
     }
@@ -1300,15 +1452,26 @@ function debouncedSync(){
   }, 2500);
 }
 
-function queueAndSync(payload) {
-  gsQueue.push(payload);
-  saveQueue();
+async function queueAndSync(payload) {
+  await queueReadyPromise;
+  if(payload && (payload.type==='sync' || payload.type==='sync_ref')){
+    // Kuyrukta ne kadar eski tam senkron varsa kaldır; sadece son db hali gönderilecek.
+    gsQueue=gsQueue.filter(item=>item && item.type!=='sync' && item.type!=='sync_ref');
+    gsQueue.push({type:'sync_ref'});
+  }else if(payload && payload.type==='sale' && payload.id && gsQueue.some(item=>item.type==='sale' && item.id===payload.id)){
+    return true; // aynı buton olayı/fiş ikinci kez kuyruğa girmesin
+  }else{
+    gsQueue.push(payload);
+  }
+  const persisted=await saveQueue();
   setSyncUI('queue', 'Kaydediliyor');
-  setTimeout(processQueue, 150);
+  if(!persisted) setSyncUI('queue', 'Depolama dolu, uygulamayı açık tut');
+  if(navigator.onLine) setTimeout(processQueue, 50);
+  return persisted;
 }
 
 // VERESİYE + ÜRÜN tam senkronizasyon (okunabilir tablolar + teknik veri)
-function gsSyncAll() {
+function buildFullSyncPayload() {
   const customers = db.customers.map(c => ({
     id: c.id, name: c.name, phone: c.phone||'',
     limit: c.limit||0, balance: c.balance||0,
@@ -1324,15 +1487,18 @@ function gsSyncAll() {
     price:p.price, cost:p.cost||0,
     stock:p.stock, minStock:p.minStock
   }));
-  queueAndSync({ type:'sync', customers, products });
+  return { type:'sync', customers, products };
+}
+function gsSyncAll() {
+  return queueAndSync({type:'sync_ref'});
 }
 
 // Sadece veresiye güncellendiğinde
-function gsSaveCustomers() { gsSyncAll(); }
+function gsSaveCustomers() { return gsSyncAll(); }
 
 // SATIŞ → Satislar sekmesine (her ürün ayrı satır)
 function gsSendSale(sale) {
-  queueAndSync({
+  return queueAndSync({
     type: 'sale',
     id: sale.id,
     items: (sale.items||[]).map(i=>({name:i.name, price:i.unitPrice, qty:i.qty})),
@@ -1417,6 +1583,14 @@ window.addEventListener('online', () => {
   processQueue();
 });
 window.addEventListener('offline', () => setSyncUI('offline','Çevrimdışı'));
+document.addEventListener('visibilitychange', () => {
+  // Telefon/PC tekrar uygulamaya döndüğünde online olayı kaçmış olsa bile bekleme.
+  if(!document.hidden && navigator.onLine && gsQueue.length>0){
+    gsNetworkRetryCount=0;
+    gsNextRetryAt=0;
+    processQueue();
+  }
+});
 
 // 60s polling — başka cihazdan veresiye değişti mi?
 setInterval(async () => {
@@ -1794,11 +1968,16 @@ function selCust(id){
   if(si) si.blur();
 }
 
-function confirmSale(){
+let saleCompleting=false;
+async function confirmSale(){
+  if(saleCompleting || !cart.length) return; // çift tıklama / boş sepet tekrarını engelle
   if(payMode==='ver'&&!selCustId){toast('Müşteri seç','err');return;}
   const total=getTotal();
   const disc=parseFloat(document.getElementById('disc-inp').value)||0;
   const cust=selCustId?db.customers.find(c=>c.id===selCustId):null;
+  saleCompleting=true;
+  const dbBeforeSale=JSON.stringify(db);
+  try{
   const sale={id:uid(),date:new Date().toISOString(),items:cart.map(c=>({...c})),total,discount:disc,method:payMode,customer:cust?.name||null,customerId:selCustId||null};
   db.sales.push(sale);
   // Stock düş
@@ -1813,11 +1992,23 @@ function confirmSale(){
     cust.txs.push({type:'veresiye',amount:total,date:sale.date,saleId:sale.id,items:cart.map(c=>({name:c.name,qty:c.qty,price:c.unitPrice})),note:''});
     markCustomerChanged();
   }
-  save();
+  if(!save()){
+    // Depolama gerçekten dolu kalırsa bellekteki eklemeyi geri al;
+    // sepet açık kalır ama aynı veresiye ikinci kez eklenmez.
+    db=JSON.parse(dbBeforeSale);
+    renderVer();
+    checkLowStock();
+    toast('Depolama dolu — satış eklenmedi, yer açıp tekrar dene','err');
+    return;
+  }
   checkBackupReminder(); // uzun süre offline kalındıysa yedek hatırlat
   // ── Google Sheets sync ──
-  gsSendSale(sale);
-  if(payMode==='ver'&&cust) gsSaveCustomers();
+  const saleQueued=await gsSendSale(sale);
+  const syncQueued=payMode==='ver'&&cust ? await gsSaveCustomers() : true;
+  if(!saleQueued || !syncQueued){
+    // db ana kaydı güvende; sadece tarayıcı kapanmadan tekrar kalıcı kuyruk denenecek.
+    setSyncUI('queue','Kuyruk depolanamadı, uygulamayı açık tut');
+  }
   document.getElementById('last-sale').textContent=new Date().toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
   const todayS=db.sales.filter(s=>s.date.startsWith(todayISO())).length;
   document.getElementById('today-count').textContent=todayS;
@@ -1827,6 +2018,9 @@ function confirmSale(){
   toast(`Satış tamamlandı — ${fTL(total)}`,'ok');
   beepOk();
   clearCart();
+  }finally{
+    saleCompleting=false;
+  }
 }
 
 /* ═══════════════ FİŞ ═══════════════ */
@@ -1996,20 +2190,34 @@ function openVerDetail(id){
   }).join(''):'<div style="text-align:center;padding:16px;color:var(--tx3);font-size:12px;">İşlem yok</div>';
   document.getElementById('ov-ver').classList.add('show');
 }
-function takePayment(){
+let paymentCompleting=false;
+async function takePayment(){
+  if(paymentCompleting) return;
   const c=db.customers.find(x=>x.id===detCustId);if(!c) return;
   const amt=parseFloat(document.getElementById('vd-ode').value)||0;
   if(amt<=0){toast('Tutar gir','err');return;}
   if(amt>(c.balance||0)){toast('Bakiyeden fazla','err');return;}
+  paymentCompleting=true;
+  const dbBeforePayment=JSON.stringify(db);
+  try{
   const tip=document.getElementById('vd-ode-tip').value;
   c.balance=Math.max(0,(c.balance||0)-amt);
   c.txs=c.txs||[];
   c.txs.push({type:tip,amount:amt,date:new Date().toISOString(),items:[],note:'Ödeme alındı'});
   db.sales.push({id:uid(),date:new Date().toISOString(),items:[],total:amt,method:tip,customer:c.name,customerId:c.id,note:'Veresiye ödemesi'});
   markCustomerChanged();
-  save();toast(`${fTL(amt)} alındı`,'ok');
-  gsSaveCustomers();
+  if(!save()){
+    db=JSON.parse(dbBeforePayment);
+    openVerDetail(detCustId);renderVer();
+    toast('Depolama dolu — ödeme eklenmedi','err');
+    return;
+  }
+  toast(`${fTL(amt)} alındı`,'ok');
+  await gsSaveCustomers();
   openVerDetail(detCustId);renderVer();
+  }finally{
+    paymentCompleting=false;
+  }
 }
 function openNewMust(fromPay=false){
   fromPayMust=fromPay===true;
@@ -3252,10 +3460,9 @@ function forceSyncNow(){
 
 // KURTARMA: Tüm satış geçmişini Sheets'e YENİDEN gönder
 // Geçmişte kuyruk tıkanması yüzünden Sheets'e ulaşmamış satışlar
-// için kullanılır. Sheets'te aynı satış 2 kere yazılabilir
-// (Fiş No ile ayırt edebilirsin), ama veri kaybından iyidir.
+// için kullanılır. Apps Script Fiş No kontrolüyle tekrarları engeller.
 async function resendAllSalesHistory(){
-  if (!confirm(`${db.sales.length} satışın TAMAMI tekrar Sheets'e gönderilecek.\n\nBu işlem birkaç dakika sürebilir ve Sheets'te bazı satışlar 2 kere görünebilir (Fiş No'ya göre ayırt edilebilir).\n\nDevam edilsin mi?`)) return;
+  if (!confirm(`${db.sales.length} satışın TAMAMI kontrol edilecek.\n\nEksik olanlar Sheets'e yazılacak; aynı Fiş No daha önce varsa tekrar yazılmayacak.\n\nDevam edilsin mi?`)) return;
 
   const btn = document.getElementById('resend-history-btn');
   const statusEl = document.getElementById('resend-status');
@@ -3524,14 +3731,21 @@ function doPost(e) {
     const body = JSON.parse(e.postData.contents);
     const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
 
-    // ── 1. SATIŞ kaydı (HIZLI — sadece 1 satır ekler, ms sürer) ──
+    // ── 1. TOPLU SATIŞ — offline kuyruk bağlantı gelince 50'şerli gelir ──
+    if (body.type === 'sales_batch') {
+      const written = logSalesBatchFast(ss, body.sales || []);
+      SpreadsheetApp.flush();
+      return json(JSON.stringify({ok:true,type:'sales_batch',written:written}));
+    }
+
+    // ── 2. SATIŞ kaydı (HIZLI — sadece 1 satır ekler, ms sürer) ──
     if (body.type === 'sale') {
       logSaleFast(ss, body);
       SpreadsheetApp.flush();
       return json('{"ok":true,"type":"sale"}');
     }
 
-    // ── 2. VERESİYE + ÜRÜN tam senkronizasyon (TOPLU YAZMA) ──
+    // ── 3. VERESİYE + ÜRÜN tam senkronizasyon (TOPLU YAZMA) ──
     if (body.type === 'sync') {
       saveData(ss, body.customers || [], body.products || []);
       writeCustomerTableFast(ss, body.customers || []);
@@ -3542,7 +3756,7 @@ function doPost(e) {
       return json('{"ok":true,"type":"sync"}');
     }
 
-    // ── 3. Eski format (sadece müşteri array) — geriye uyumluluk ──
+    // ── 4. Eski format (sadece müşteri array) — geriye uyumluluk ──
     if (Array.isArray(body)) {
       saveData(ss, body, null);
       writeCustomerTableFast(ss, body);
@@ -3602,6 +3816,56 @@ function logSaleFast(ss, sale) {
     const startRow = sheet.getLastRow() + 1;
     sheet.getRange(startRow, 1, rows.length, 9).setValues(rows);
   }
+}
+
+// ──────────────────────────────────────────────
+//  OFFLINE KUYRUK → satışları tek istekte toplu yaz
+//  Fiş No kontrolü sayesinde cevap kaybolup paket tekrar gelirse çift yazmaz.
+// ──────────────────────────────────────────────
+function logSalesBatchFast(ss, sales) {
+  if (!Array.isArray(sales) || sales.length === 0) return 0;
+  const sheet = getSheet(ss, 'Satislar');
+
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(['Ürün', 'Fiyat (₺)', 'Adet', 'Tutar (₺)', 'Tarih', 'Saat', 'Ödeme', 'Müşteri', 'Fiş No']);
+    const h = sheet.getRange(1, 1, 1, 9);
+    h.setFontWeight('bold').setBackground('#1a1a1a').setFontColor('#f5a623');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 200);
+  }
+
+  const existingIds = new Set();
+  if (sheet.getLastRow() > 1) {
+    sheet.getRange(2, 9, sheet.getLastRow() - 1, 1).getValues()
+      .forEach(r => { if (r[0] !== '') existingIds.add(String(r[0])); });
+  }
+
+  const rows = [];
+  sales.forEach(sale => {
+    const fisNo = sale.id ? String(sale.id) : '';
+    if (fisNo && existingIds.has(fisNo)) return;
+
+    const tarih = sale.tarih || '';
+    const saat = sale.saat || '';
+    const odeme = sale.odeme || '';
+    const musteri = sale.musteri || '';
+    const items = sale.items || [];
+
+    if (items.length === 0) {
+      rows.push([sale.aciklama || 'İşlem', '', '', sale.toplam || 0, tarih, saat, odeme, musteri, fisNo]);
+    } else {
+      items.forEach(it => rows.push([
+        it.name || '', it.price || 0, it.qty || 1, (it.price || 0) * (it.qty || 1),
+        tarih, saat, odeme, musteri, fisNo
+      ]));
+    }
+    if (fisNo) existingIds.add(fisNo);
+  });
+
+  if (rows.length > 0) {
+    sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, 9).setValues(rows);
+  }
+  return rows.length;
 }
 
 // ──────────────────────────────────────────────
@@ -3735,7 +3999,7 @@ function copyAppsScript() {
 }
 
 /* ═══════════════ INIT ═══════════════ */
-loadQueue();
+queueReadyPromise=loadQueue();
 load();
 seed();
 checkLowStock();
@@ -3756,10 +4020,11 @@ renderAlimSummary();
 // - Sonraki açılışlarda Sheets'ten kontrol et (çoklu cihaz)
 (async function initSync(){
   try {
+    await queueReadyPromise;
     const firstRun = !localStorage.getItem('bkl_synced_once');
     if (firstRun && db.customers.length > 0) {
       // Bu cihazda zaten müşteri verisi var → Sheets'i bizim veriyle kur
-      gsSyncAll();
+      await gsSyncAll();
       localStorage.setItem('bkl_synced_once','1');
       setTimeout(()=>{ renderVer(); }, 1000);
     } else {
